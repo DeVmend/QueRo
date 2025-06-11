@@ -1,67 +1,82 @@
-# Queue Router
-
-A modern, type-safe queue routing library for Cloudflare Workers with TypeScript support.
+<div align="center">
+    <img src="./assets/que-ro.png" width="250" height="auto" alt="Que Ro"/>
+</div>
+<h2 align="center" style="font-weight: 700; color: #6c47ff;">
+  Effortless, elegant queue routing for Cloudflare Workers <span style="font-size:1.2em;">✨</span>
+</h2>
+<p align="center" style="font-size:1.1em; color: #555;">
+  <em>Type-safe. Minimal. Developer-first.</em>
+</p>
 
 ## Features
 
+A modern, type-safe queue routing library for Cloudflare Workers with TypeScript support.
+
 - 🚀 **Modern TypeScript** - Full type safety and IntelliSense support
 - 🔄 **Flexible Routing** - Route messages to different handlers based on queue names and actions
-- 🪶 **Lightweight** - Minimal dependencies, optimized for Cloudflare Workers
+- 🪶 **Lightweight** - No dependencies, optimized for Cloudflare Workers
 - 📝 **Great DX** - Intuitive API with excellent developer experience
 
 ## Installation
 
 ```bash
-pnpm install @devmend/queue-router
+pnpm install @devmend/que-ro
 ```
 
 ## Quick Start
 
 ```typescript
-import { QueueRouter } from '@devmend/queue-router';
+import { QueueRouter } from '@devmend/que-ro'
 
-type NewUserAction = {
-    action: 'new-user';
-    userId: string;
-    email: string;
+// 👇 define your message types by actions
+type NewUser = {
+    action: 'new-user'
+    userId: string
+    email: string
 }
-type DeleteUserAction = {
-    action: 'delete-user';
-    userId: string;
+type DeleteUser = {
+    action: 'delete-user'
+    userId: string
 }
-type UserActions = NewUserAction | DeleteUserAction;
+type UserActions = NewUser | DeleteUser
 
+// 👇 define your queues with their actions
 type Queues = {
-    USER_QUEUE: Queue<UserActions>;
-};
-
-const queue = new QueueRouter<{ Bindings: Environment; Queues: Queues }>({
-    USER_QUEUE: {           // 👈 Queue Binding like specified in the wrangler config
-        name: 'user-queue'  // 👈 Queue name like specified in the wrangler config
-    },
-});
-
-queue
-    .action('USER_QUEUE', 'new-user', (bodies, env, ctx) => {
-        for (const body of bodies) {
-            const userId = body.userId;
-            const email = body.email;
-            ...
-        }
-    })
-    .singleMessageAction('USER_QUEUE', 'delete-user', (body, env, ctx) => {
-        const userId = body.userId;
-        ...
-    });
-
-// Export the Worker
-export default class HealthCore extends WorkerEntrypoint<{
-    Bindings: Environment;
-}> {
-    async queue(batch: MessageBatch) {
-        queue.queue(batch, this.env, this.ctx);
-    }
+    USER_QUEUE: Queue<UserActions>
 }
+
+// 👇 create a queue router specify his Binding and name as configured in wrangler.json
+const queueRouter = new QueueRouter<{ Bindings: Environment; Queues: Queues }>({
+    USER_QUEUE: { name: 'user-queue' },
+})
+
+// 👇 add actions to the queue like defining api routes and handle them type safe
+queueRouter
+    .action('USER_QUEUE', 'new-user', async messages => {
+        console.log(messages) // 👈 get array of messages as configured size in wrangler.json
+    })
+    .singleMessageAction('USER_QUEUE', 'delete-user', async message => {
+        console.log(message) // 👈 callback handles every message by action on his own
+    })
+
+export default {
+    async fetch(req, env): Promise<Response> {
+        // example fetch handler for testing
+        env.USER_QUEUE.send({
+            action: 'new-user',
+            userId: 'foo',
+            email: 'foo@bar.com',
+        })
+        return new Response('Sent message to the queue')
+    },
+    // 👇 "link" the queue router to the queue
+    async queue(batch, env): Promise<void> {
+        queueRouter.queue(batch, env)
+    },
+} satisfies ExportedHandler<Environment, Error>
+
+// 👇 also possible to export the queue router directly if no other handlers are needed
+// export default queueRouter;
 ```
 
 ## API Documentation
