@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="./assets/que-ro.png" width="250" height="auto" alt="Que Ro"/>
+    <img src="https://github.com/DeVmend/QueRo/blob/main/assets/que-ro.png" width="250" height="auto" alt="Que Ro"/>
 </div>
 <h2 align="center" style="font-weight: 700; color: #6c47ff;">
   Effortless, elegant queue routing for Cloudflare Workers <span style="font-size:1.2em;">✨</span>
@@ -26,6 +26,8 @@ pnpm install @devmend/que-ro
 ## Quick Start
 
 ```typescript
+// index.ts
+
 import { QueueRouter } from '@devmend/que-ro'
 
 // 👇 define your message types by actions
