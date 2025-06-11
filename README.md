@@ -1,5 +1,5 @@
 <div align="center">
-    <img src="https://github.com/DeVmend/QueRo/blob/main/assets/que-ro.png" width="250" height="auto" alt="Que Ro"/>
+    <img src="https://raw.githubusercontent.com/DeVmend/QueRo/refs/heads/main/assets/que-ro.png" width="250" height="auto" alt="Que Ro"/>
 </div>
 <h2 align="center" style="font-weight: 700; color: #6c47ff;">
   Effortless, elegant queue routing for Cloudflare Workers <span style="font-size:1.2em;">✨</span>
