@@ -73,7 +73,7 @@ export default {
     },
     // 👇 "link" the queue router to the queue
     async queue(batch, env): Promise<void> {
-        queueRouter.queue(batch, env)
+        await queueRouter.queue(batch, env)
     },
 } satisfies ExportedHandler<Environment, Error>
 

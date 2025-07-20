@@ -154,13 +154,13 @@ export class QueueRouter<E extends Env = Env> {
      * @param env - Environment bindings
      * @param executionCtx - Execution context
      */
-    private processMessage(
+    private async processMessage(
         queueName: string,
         message: { body: AllMessageTypes<E['Queues']> },
         messagesByAction: Map<string, AllMessageTypes<E['Queues']>[]>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
-    ): void {
+    ): Promise<void> {
         try {
             const action = message.body.action;
             const key = this.buildHandlerKey(queueName, action);
@@ -174,7 +174,7 @@ export class QueueRouter<E extends Env = Env> {
             if (handler.type === 'multi') {
                 this.collectMessageForBatch(key, message.body, messagesByAction);
             } else {
-                this.executeSingleHandler(handler, message.body, env, executionCtx);
+                await this.executeSingleHandler(handler, message.body, env, executionCtx);
             }
         } catch (error) {
             console.error(`Error processing message in queue ${queueName}:`, error);
@@ -190,14 +190,14 @@ export class QueueRouter<E extends Env = Env> {
      * @param env - Environment bindings
      * @param executionCtx - Execution context
      */
-    private executeSingleHandler(
+    private async executeSingleHandler(
         handler: Extract<Handler<ActionMessage, E>, { type: 'single' }>,
         body: AllMessageTypes<E['Queues']>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
-    ): void {
+    ): Promise<void> {
         try {
-            handler.handle(body, env, executionCtx);
+            await handler.handle(body, env, executionCtx);
         } catch (error) {
             console.error('Error in single message handler:', error);
             throw error; // Re-throw to allow queue retry mechanism
@@ -229,11 +229,11 @@ export class QueueRouter<E extends Env = Env> {
      * @param env - Environment bindings
      * @param executionCtx - Execution context
      */
-    private processMultiHandlers(
+    private async processMultiHandlers(
         messagesByAction: Map<string, AllMessageTypes<E['Queues']>[]>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
-    ): void {
+    ): Promise<void> {
         for (const [key, bodies] of messagesByAction) {
             try {
                 const handler = this.handlers.get(key);
@@ -243,7 +243,7 @@ export class QueueRouter<E extends Env = Env> {
                 }
 
                 if (handler.type === 'multi' && bodies.length > 0) {
-                    handler.handle(bodies, env, executionCtx);
+                    await handler.handle(bodies, env, executionCtx);
                 }
             } catch (error) {
                 console.error(`Error in multi message handler for key ${key}:`, error);
@@ -258,21 +258,21 @@ export class QueueRouter<E extends Env = Env> {
      * @param env - Environment bindings
      * @param executionCtx - Execution context
      */
-    processBatch(
+    async processBatch(
         batch: MessageBatch<AllMessageTypes<E['Queues']>>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
-    ): void {
+    ): Promise<void> {
         const queueName = batch.queue;
         const messagesByAction = new Map<string, AllMessageTypes<E['Queues']>[]>();
 
         // Process all individual messages
         for (const message of batch.messages) {
-            this.processMessage(queueName, message, messagesByAction, env, executionCtx);
+            await this.processMessage(queueName, message, messagesByAction, env, executionCtx);
         }
 
         // Process all collected multi-handlers
-        this.processMultiHandlers(messagesByAction, env, executionCtx);
+        await this.processMultiHandlers(messagesByAction, env, executionCtx);
     }
 
     /**
@@ -281,13 +281,13 @@ export class QueueRouter<E extends Env = Env> {
      * @param env - Environment bindings or object
      * @param executionCtx - Execution context
      */
-    queue(
+    async queue(
         batch: MessageBatch<unknown>,
         env?: E['Bindings'] | object,
         executionCtx?: ExecutionContext
-    ): void {
+    ): Promise<void> {
         try {
-            this.processBatch(
+            await this.processBatch(
                 batch as MessageBatch<AllMessageTypes<E['Queues']>>,
                 env,
                 executionCtx
