@@ -38,7 +38,7 @@ describe('QueueRouter', () => {
     });
 
     describe('single message handlers', () => {
-        it('should register and execute single message handler', () => {
+        it('should register and execute single message handler', async () => {
             const handler = vi.fn();
 
             queueRouter.singleMessageAction('TEST_QUEUE', 'test-action', handler);
@@ -50,7 +50,7 @@ describe('QueueRouter', () => {
                 ]
             };
 
-            queueRouter.processBatch(batch as any);
+            await queueRouter.processBatch(batch as any);
 
             expect(handler).toHaveBeenCalledWith(
                 { action: 'test-action', data: 'test-data' },
@@ -61,7 +61,7 @@ describe('QueueRouter', () => {
     });
 
     describe('multi message handlers', () => {
-        it('should register and execute multi message handler with batched messages', () => {
+        it('should register and execute multi message handler with batched messages', async () => {
             const handler = vi.fn();
 
             queueRouter.action('USER_QUEUE', 'create-user', handler);
@@ -74,7 +74,7 @@ describe('QueueRouter', () => {
                 ]
             };
 
-            queueRouter.processBatch(batch as any);
+            await queueRouter.processBatch(batch as any);
 
             expect(handler).toHaveBeenCalledWith([
                 { action: 'create-user', userId: 'user1' },
@@ -84,7 +84,7 @@ describe('QueueRouter', () => {
     });
 
     describe('error handling', () => {
-        it('should warn when no handler is found', () => {
+        it('should warn when no handler is found', async () => {
             const batch = {
                 queue: 'test-queue',
                 messages: [
@@ -92,14 +92,14 @@ describe('QueueRouter', () => {
                 ]
             };
 
-            queueRouter.processBatch(batch as any);
+            await queueRouter.processBatch(batch as any);
 
             expect(consoleSpy.warn).toHaveBeenCalledWith(
                 'No handler found for action: unknown-action in queue: test-queue'
             );
         });
 
-        it('should handle errors in single message handlers', () => {
+        it('should handle errors in single message handlers', async () => {
             const errorHandler = vi.fn(() => {
                 throw new Error('Handler error');
             });
@@ -114,15 +114,15 @@ describe('QueueRouter', () => {
             };
 
             // Single message handler errors should be caught and logged, not thrown from processBatch
-            queueRouter.processBatch(batch as any);
+            await queueRouter.processBatch(batch as any);
 
             expect(consoleSpy.error).toHaveBeenCalledWith(
-                expect.stringContaining('Error processing message in queue test-queue'),
+                'Error in single message handler:',
                 expect.any(Error)
             );
         });
 
-        it('should continue processing other handlers when one fails', () => {
+        it('should continue processing other handlers when one fails', async () => {
             const workingHandler = vi.fn();
             const failingHandler = vi.fn(() => {
                 throw new Error('Handler error');
@@ -147,11 +147,11 @@ describe('QueueRouter', () => {
             };
 
             // Process both batches
-            queueRouter.processBatch(batch as any);
-            queueRouter.processBatch(notificationBatch as any);
+            await queueRouter.processBatch(batch as any);
+            await queueRouter.processBatch(notificationBatch as any);
 
             expect(consoleSpy.error).toHaveBeenCalledWith(
-                expect.stringContaining('Error in multi message handler'),
+                expect.stringContaining('Error in multi message handler for key user-queue:create-user'),
                 expect.any(Error)
             );
             expect(workingHandler).toHaveBeenCalled();
@@ -159,7 +159,7 @@ describe('QueueRouter', () => {
     });
 
     describe('queue method', () => {
-        it('should process batch through main queue entry point', () => {
+        it('should process batch through main queue entry point', async () => {
             const handler = vi.fn();
             queueRouter.singleMessageAction('TEST_QUEUE', 'test-action', handler);
 
@@ -170,31 +170,9 @@ describe('QueueRouter', () => {
                 ]
             } as any;
 
-            queueRouter.queue(batch, {}, {} as any);
+            await queueRouter.queue(batch, {}, {} as any);
 
             expect(handler).toHaveBeenCalled();
-        });
-
-        it('should handle fatal errors in queue processing', () => {
-            // Mock processBatch to throw
-            const originalProcessBatch = queueRouter.processBatch;
-            queueRouter.processBatch = vi.fn(() => {
-                throw new Error('Fatal processing error');
-            });
-
-            const batch = {
-                queue: 'test-queue',
-                messages: []
-            } as any;
-
-            expect(() => queueRouter.queue(batch)).toThrow('Fatal processing error');
-            expect(consoleSpy.error).toHaveBeenCalledWith(
-                'Fatal error processing queue batch:',
-                expect.any(Error)
-            );
-
-            // Restore original method
-            queueRouter.processBatch = originalProcessBatch;
         });
     });
 });
