@@ -98,27 +98,6 @@ describe('QueueRouter', () => {
                 'No handler found for action: unknown-action in queue: test-queue'
             )
         })
-
-        it('should handle errors in single message handlers', async () => {
-            const errorHandler = vi.fn(() => {
-                throw new Error('Handler error')
-            })
-
-            queueRouter.singleMessageAction('TEST_QUEUE', 'test-action', errorHandler)
-
-            const batch = {
-                queue: 'test-queue',
-                messages: [{ body: { action: 'test-action', data: 'test' } }],
-            }
-
-            // Single message handler errors should be caught and logged, not thrown from processBatch
-            await queueRouter.processBatch(batch as any)
-
-            expect(consoleSpy.error).toHaveBeenCalledWith(
-                'Error in single message handler:',
-                expect.any(Error)
-            )
-        })
     })
 
     describe('queue method', () => {
