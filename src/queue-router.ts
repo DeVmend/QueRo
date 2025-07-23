@@ -1,4 +1,4 @@
-import type { ExecutionContext, MessageBatch } from '@cloudflare/workers-types';
+import type { ExecutionContext, MessageBatch } from '@cloudflare/workers-types'
 import type {
     ActionMessage,
     ActionsOfQueue,
@@ -6,7 +6,7 @@ import type {
     Env,
     Handler,
     QueueConfig,
-} from './types';
+} from './types'
 
 /**
  * A robust queue router that handles message processing for Cloudflare Queues
@@ -15,9 +15,9 @@ import type {
  * @template E - Environment type extending Env
  */
 export class QueueRouter<E extends Env = Env> {
-    private readonly handlers = new Map<string, Handler<ActionMessage, E>>();
+    private readonly handlers = new Map<string, Handler<ActionMessage, E>>()
 
-    constructor(protected readonly queues: Record<keyof E['Queues'], QueueConfig>) { }
+    constructor(protected readonly queues: Record<keyof E['Queues'], QueueConfig>) {}
 
     /**
      * Gets the configuration for a specific queue binding
@@ -26,11 +26,11 @@ export class QueueRouter<E extends Env = Env> {
      * @throws Error if queue is not found
      */
     protected getQueueConfig(binding: keyof E['Queues']): QueueConfig {
-        const queue = this.queues[binding];
+        const queue = this.queues[binding]
         if (!queue) {
-            throw new Error(`Queue ${String(binding)} not found`);
+            throw new Error(`Queue ${String(binding)} not found`)
         }
-        return queue;
+        return queue
     }
 
     /**
@@ -39,7 +39,7 @@ export class QueueRouter<E extends Env = Env> {
      * @returns The queue name
      */
     protected getQueueName(binding: keyof E['Queues']): string {
-        return this.getQueueConfig(binding).name;
+        return this.getQueueConfig(binding).name
     }
 
     /**
@@ -49,12 +49,7 @@ export class QueueRouter<E extends Env = Env> {
         Q extends keyof E['Queues'],
         T extends ActionsOfQueue<E['Queues'][Q]>,
         A extends T['action'],
-    >(
-        queue: Q,
-        action: A,
-        handler: (body: Extract<T, { action: A }>) => void,
-        multi: false
-    ): this;
+    >(queue: Q, action: A, handler: (body: Extract<T, { action: A }>) => void, multi: false): this
     protected addAction<
         Q extends keyof E['Queues'],
         T extends ActionsOfQueue<E['Queues'][Q]>,
@@ -64,7 +59,7 @@ export class QueueRouter<E extends Env = Env> {
         action: A,
         handler: (bodies: Extract<T, { action: A }>[]) => void,
         multi: true
-    ): this;
+    ): this
     protected addAction<
         Q extends keyof E['Queues'],
         T extends ActionsOfQueue<E['Queues'][Q]>,
@@ -77,19 +72,19 @@ export class QueueRouter<E extends Env = Env> {
             | ((bodies: Extract<T, { action: A }>[]) => void),
         multi: boolean
     ) {
-        const key = this.buildHandlerKey(this.getQueueName(queue), action);
+        const key = this.buildHandlerKey(this.getQueueName(queue), action)
         const handlerConfig: Handler<ActionMessage, E> = multi
             ? {
-                type: 'multi',
-                handle: handler as (bodies: ActionMessage[]) => void,
-            }
+                  type: 'multi',
+                  handle: handler as (bodies: ActionMessage[]) => void,
+              }
             : {
-                type: 'single',
-                handle: handler as (body: ActionMessage) => void,
-            };
+                  type: 'single',
+                  handle: handler as (body: ActionMessage) => void,
+              }
 
-        this.handlers.set(key, handlerConfig);
-        return this;
+        this.handlers.set(key, handlerConfig)
+        return this
     }
 
     /**
@@ -111,7 +106,7 @@ export class QueueRouter<E extends Env = Env> {
             executionCtx?: ExecutionContext
         ) => void
     ) {
-        return this.addAction(queue, action, handler, false);
+        return this.addAction(queue, action, handler, false)
     }
 
     /**
@@ -133,7 +128,7 @@ export class QueueRouter<E extends Env = Env> {
             executionCtx?: ExecutionContext
         ) => void
     ) {
-        return this.addAction(queue, action, handler, true);
+        return this.addAction(queue, action, handler, true)
     }
 
     /**
@@ -143,7 +138,7 @@ export class QueueRouter<E extends Env = Env> {
      * @returns Unique handler key
      */
     private buildHandlerKey(queueName: string, action: string): string {
-        return `${queueName}:${action}`;
+        return `${queueName}:${action}`
     }
 
     /**
@@ -162,24 +157,23 @@ export class QueueRouter<E extends Env = Env> {
         executionCtx?: ExecutionContext
     ): Promise<void> {
         try {
-            const action = message.body.action;
-            const key = this.buildHandlerKey(queueName, action);
-            const handler = this.handlers.get(key);
+            const action = message.body.action
+            const key = this.buildHandlerKey(queueName, action)
+            const handler = this.handlers.get(key)
 
             if (!handler) {
-                console.warn(`No handler found for action: ${action} in queue: ${queueName}`);
-                return;
+                console.warn(`No handler found for action: ${action} in queue: ${queueName}`)
+                return
             }
 
             if (handler.type === 'multi') {
-                this.collectMessageForBatch(key, message.body, messagesByAction);
+                this.collectMessageForBatch(key, message.body, messagesByAction)
             } else {
-                await this.executeSingleHandler(handler, message.body, env, executionCtx);
+                await this.executeSingleHandler(handler, message.body, env, executionCtx)
             }
         } catch (error) {
-            console.error(`Error processing message in queue ${queueName}:`, error);
-            // In a production environment, you might want to send this to a dead letter queue
-            // or implement retry logic here
+            console.error(`Error processing message in queue ${queueName}:`, error)
+            throw error
         }
     }
 
@@ -197,10 +191,10 @@ export class QueueRouter<E extends Env = Env> {
         executionCtx?: ExecutionContext
     ): Promise<void> {
         try {
-            await handler.handle(body, env, executionCtx);
+            await handler.handle(body, env, executionCtx)
         } catch (error) {
-            console.error('Error in single message handler:', error);
-            throw error; // Re-throw to allow queue retry mechanism
+            console.error('Error in single message handler:', error)
+            throw error // Re-throw to allow queue retry mechanism
         }
     }
 
@@ -215,11 +209,11 @@ export class QueueRouter<E extends Env = Env> {
         body: AllMessageTypes<E['Queues']>,
         messagesByAction: Map<string, AllMessageTypes<E['Queues']>[]>
     ): void {
-        const messages = messagesByAction.get(key);
+        const messages = messagesByAction.get(key)
         if (messages) {
-            messages.push(body);
+            messages.push(body)
         } else {
-            messagesByAction.set(key, [body]);
+            messagesByAction.set(key, [body])
         }
     }
 
@@ -236,18 +230,18 @@ export class QueueRouter<E extends Env = Env> {
     ): Promise<void> {
         for (const [key, bodies] of messagesByAction) {
             try {
-                const handler = this.handlers.get(key);
+                const handler = this.handlers.get(key)
                 if (!handler) {
-                    console.warn(`Handler not found for key: ${key}`);
-                    continue;
+                    console.warn(`Handler not found for key: ${key}`)
+                    continue
                 }
 
                 if (handler.type === 'multi' && bodies.length > 0) {
-                    await handler.handle(bodies, env, executionCtx);
+                    await handler.handle(bodies, env, executionCtx)
                 }
             } catch (error) {
-                console.error(`Error in multi message handler for key ${key}:`, error);
-                // Continue processing other handlers even if one fails
+                console.error(`Error in multi message handler for key ${key}:`, error)
+                throw error // Re-throw to allow queue retry mechanism
             }
         }
     }
@@ -263,16 +257,16 @@ export class QueueRouter<E extends Env = Env> {
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
     ): Promise<void> {
-        const queueName = batch.queue;
-        const messagesByAction = new Map<string, AllMessageTypes<E['Queues']>[]>();
+        const queueName = batch.queue
+        const messagesByAction = new Map<string, AllMessageTypes<E['Queues']>[]>()
 
         // Process all individual messages
         for (const message of batch.messages) {
-            await this.processMessage(queueName, message, messagesByAction, env, executionCtx);
+            await this.processMessage(queueName, message, messagesByAction, env, executionCtx)
         }
 
         // Process all collected multi-handlers
-        await this.processMultiHandlers(messagesByAction, env, executionCtx);
+        await this.processMultiHandlers(messagesByAction, env, executionCtx)
     }
 
     /**
@@ -291,10 +285,10 @@ export class QueueRouter<E extends Env = Env> {
                 batch as MessageBatch<AllMessageTypes<E['Queues']>>,
                 env,
                 executionCtx
-            );
+            )
         } catch (error) {
-            console.error('Fatal error processing queue batch:', error);
-            throw error;
+            console.error('Fatal error processing queue batch:', error)
+            throw error // Re-throw to allow queue retry mechanism
         }
     }
 }
