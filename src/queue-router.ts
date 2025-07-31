@@ -49,7 +49,12 @@ export class QueueRouter<E extends Env = Env> {
         Q extends keyof E['Queues'],
         T extends ActionsOfQueue<E['Queues'][Q]>,
         A extends T['action'],
-    >(queue: Q, action: A, handler: (body: Extract<T, { action: A }>) => void, multi: false): this
+    >(
+        queue: Q,
+        action: A,
+        handler: (body: Extract<T, { action: A }>, Env: E['Bindings']) => void,
+        multi: false
+    ): this
     protected addAction<
         Q extends keyof E['Queues'],
         T extends ActionsOfQueue<E['Queues'][Q]>,
@@ -57,7 +62,7 @@ export class QueueRouter<E extends Env = Env> {
     >(
         queue: Q,
         action: A,
-        handler: (bodies: Extract<T, { action: A }>[]) => void,
+        handler: (bodies: Extract<T, { action: A }>[], Env: E['Bindings']) => void,
         multi: true
     ): this
     protected addAction<
@@ -102,7 +107,7 @@ export class QueueRouter<E extends Env = Env> {
         action: A,
         handler: (
             body: Extract<T, { action: A }>,
-            Env?: E['Bindings'],
+            Env: E['Bindings'],
             executionCtx?: ExecutionContext
         ) => void
     ) {
@@ -124,7 +129,7 @@ export class QueueRouter<E extends Env = Env> {
         action: A,
         handler: (
             bodies: Extract<T, { action: A }>[],
-            Env?: E['Bindings'],
+            Env: E['Bindings'],
             executionCtx?: ExecutionContext
         ) => void
     ) {
