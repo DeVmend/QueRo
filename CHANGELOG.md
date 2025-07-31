@@ -1,5 +1,11 @@
 # @devmend/que-ro
 
+## 0.4.1
+
+### Patch Changes
+
+- fix internal methods
+
 ## 0.4.0
 
 ### Minor Changes

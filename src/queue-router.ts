@@ -154,7 +154,7 @@ export class QueueRouter<E extends Env = Env> {
      * @param env - Environment bindings
      * @param executionCtx - Execution context
      */
-    private async processMessage(
+    protected async processMessage(
         queueName: string,
         message: { body: AllMessageTypes<E['Queues']> },
         messagesByAction: Map<string, AllMessageTypes<E['Queues']>[]>,
@@ -257,7 +257,7 @@ export class QueueRouter<E extends Env = Env> {
      * @param env - Environment bindings
      * @param executionCtx - Execution context
      */
-    async processBatch(
+    protected async processBatch(
         batch: MessageBatch<AllMessageTypes<E['Queues']>>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext

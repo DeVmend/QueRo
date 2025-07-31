@@ -1,6 +1,6 @@
 {
     "name": "@devmend/que-ro",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "description": "A modern queue routing library for Cloudflare Workers",
     "type": "module",
     "main": "./dist/index.js",
