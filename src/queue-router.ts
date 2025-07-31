@@ -198,7 +198,7 @@ export class QueueRouter<E extends Env = Env> {
         try {
             await handler.handle(body, env, executionCtx)
         } catch (error) {
-            console.error('Error in single message handler:', error)
+            console.error('Error in action handler:', error)
             throw error // Re-throw to allow queue retry mechanism
         }
     }
@@ -245,7 +245,7 @@ export class QueueRouter<E extends Env = Env> {
                     await handler.handle(bodies, env, executionCtx)
                 }
             } catch (error) {
-                console.error(`Error in multi message handler for key ${key}:`, error)
+                console.error(`Error in batch handler for key ${key}:`, error)
                 throw error // Re-throw to allow queue retry mechanism
             }
         }

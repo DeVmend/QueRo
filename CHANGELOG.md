@@ -1,5 +1,11 @@
 # @devmend/que-ro
 
+## 0.4.3
+
+### Patch Changes
+
+- correct error messages
+
 ## 0.4.2
 
 ### Patch Changes
