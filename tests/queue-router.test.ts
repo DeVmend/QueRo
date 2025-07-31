@@ -45,10 +45,10 @@ describe('QueueRouter', () => {
 
             const batch = {
                 queue: 'test-queue',
-                messages: [{ body: { action: 'test-action', data: 'test-data' } }],
+                messages: [{ body: { action: 'test-action', data: 'test-data' }, ack: () => {} }],
             }
 
-            await queueRouter.processBatch(batch as any)
+            await queueRouter['processBatch'](batch as any)
 
             expect(handler).toHaveBeenCalledWith(
                 { action: 'test-action', data: 'test-data' },
@@ -67,12 +67,12 @@ describe('QueueRouter', () => {
             const batch = {
                 queue: 'user-queue',
                 messages: [
-                    { body: { action: 'create-user', userId: 'user1' } },
-                    { body: { action: 'create-user', userId: 'user2' } },
+                    { body: { action: 'create-user', userId: 'user1' }, ack: () => {} },
+                    { body: { action: 'create-user', userId: 'user2' }, ack: () => {} },
                 ],
             }
 
-            await queueRouter.processBatch(batch as any)
+            await queueRouter['processBatch'](batch as any)
 
             expect(handler).toHaveBeenCalledWith(
                 [
@@ -89,14 +89,27 @@ describe('QueueRouter', () => {
         it('should warn when no handler is found', async () => {
             const batch = {
                 queue: 'test-queue',
-                messages: [{ body: { action: 'unknown-action', data: 'test' } }],
+                messages: [{ body: { action: 'unknown-action', data: 'test' }, ack: () => {} }],
             }
 
-            await queueRouter.processBatch(batch as any)
+            await queueRouter['processBatch'](batch as any)
 
             expect(consoleSpy.warn).toHaveBeenCalledWith(
                 'No handler found for action: unknown-action in queue: test-queue'
             )
+        })
+    })
+
+    describe('ack', () => {
+        it('should ack messages', async () => {
+            const batch = {
+                queue: 'test-queue',
+                messages: [{ body: { action: 'test-action', data: 'test' }, ack: vi.fn() }],
+            }
+
+            await queueRouter['processBatch'](batch as any)
+
+            expect(batch.messages[0].ack).toHaveBeenCalled()
         })
     })
 
@@ -107,7 +120,7 @@ describe('QueueRouter', () => {
 
             const batch = {
                 queue: 'test-queue',
-                messages: [{ body: { action: 'test-action', data: 'test' } }],
+                messages: [{ body: { action: 'test-action', data: 'test' }, ack: () => {} }],
             } as any
 
             await queueRouter.queue(batch, {}, {} as any)
