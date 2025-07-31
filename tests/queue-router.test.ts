@@ -62,7 +62,7 @@ describe('QueueRouter', () => {
         it('should register and execute multi message handler with batched messages', async () => {
             const handler = vi.fn()
 
-            queueRouter.action('USER_QUEUE', 'create-user', handler)
+            queueRouter.batch('USER_QUEUE', 'create-user', handler)
 
             const batch = {
                 queue: 'user-queue',
