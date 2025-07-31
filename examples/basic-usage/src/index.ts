@@ -29,10 +29,10 @@ const queueRouter = new QueueRouter<{ Bindings: Environment; Queues: Queues }>({
 
 // 👇 add actions to the queue like defining api routes and handle them type safe
 queueRouter
-	.action('USER_QUEUE', 'new-user', async (messages) => {
+	.batch('USER_QUEUE', 'new-user', async (messages) => {
 		console.log(messages); // 👈 get array of messages as configured size in wrangler.json
 	})
-	.singleMessageAction('USER_QUEUE', 'delete-user', async (message) => {
+	.action('USER_QUEUE', 'delete-user', async (message) => {
 		console.log(message); // 👈 callback handles every message by action on his own
 	})
 
