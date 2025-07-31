@@ -41,7 +41,7 @@ describe('QueueRouter', () => {
         it('should register and execute single message handler', async () => {
             const handler = vi.fn()
 
-            queueRouter.singleMessageAction('TEST_QUEUE', 'test-action', handler)
+            queueRouter.action('TEST_QUEUE', 'test-action', handler)
 
             const batch = {
                 queue: 'test-queue',
@@ -103,7 +103,7 @@ describe('QueueRouter', () => {
     describe('queue method', () => {
         it('should process batch through main queue entry point', async () => {
             const handler = vi.fn()
-            queueRouter.singleMessageAction('TEST_QUEUE', 'test-action', handler)
+            queueRouter.batch('TEST_QUEUE', 'test-action', handler)
 
             const batch = {
                 queue: 'test-queue',

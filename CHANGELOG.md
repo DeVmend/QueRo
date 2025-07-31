@@ -1,5 +1,14 @@
 # @devmend/que-ro
 
+## 0.4.0
+
+### Minor Changes
+
+- rename action and singleMessageAction
+
+    action -> batch
+    singleMessageAction -> action
+
 ## 0.3.2
 
 ### Patch Changes

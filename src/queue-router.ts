@@ -98,7 +98,7 @@ export class QueueRouter<E extends Env = Env> {
      * @param action - The action type to handle
      * @param handler - The handler function for single messages
      */
-    singleMessageAction<
+    action<
         Q extends keyof E['Queues'],
         T extends ActionsOfQueue<E['Queues'][Q]>,
         A extends T['action'],
@@ -120,7 +120,7 @@ export class QueueRouter<E extends Env = Env> {
      * @param action - The action type to handle
      * @param handler - The handler function for message batches
      */
-    action<
+    batch<
         Q extends keyof E['Queues'],
         T extends ActionsOfQueue<E['Queues'][Q]>,
         A extends T['action'],
