@@ -1,5 +1,11 @@
 # @devmend/que-ro
 
+## 0.4.2
+
+### Patch Changes
+
+- add message.ack() in batch handler
+
 ## 0.4.1
 
 ### Patch Changes

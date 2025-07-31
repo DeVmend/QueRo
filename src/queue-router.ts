@@ -268,6 +268,7 @@ export class QueueRouter<E extends Env = Env> {
         // Process all individual messages
         for (const message of batch.messages) {
             await this.processMessage(queueName, message, messagesByAction, env, executionCtx)
+            message.ack()
         }
 
         // Process all collected multi-handlers
