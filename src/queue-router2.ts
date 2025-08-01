@@ -1,23 +1,8 @@
 import type { ExecutionContext, MessageBatch } from '@cloudflare/workers-types'
-import type {
-    ActionMessage,
-    ActionsOfQueue,
-    AllMessageTypes,
-    Env,
-    Handler,
-    QueueConfig,
-} from './types'
+import type { ActionsOfQueue, Env } from './types'
 
-/**
- * A robust queue router that handles message processing for Cloudflare Queues
- * with support for both single and batch message processing.
- *
- * @template E - Environment type extending Env
- */
 export class QueueRouter2<E extends Env = Env> {
-
-    constructor(protected readonly queues: Record<keyof E['Queues'], QueueConfig>) { }
-
+    constructor() {}
 
     action<
         Q extends keyof E['Queues'],
