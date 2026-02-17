@@ -65,16 +65,16 @@ export default {
 
 The queue name is resolved at runtime from `batch.queue`, so your code works across all environments:
 
-```typescript
-// wrangler.toml (production)
-;[[queues.consumers]]
-queue = 'user-queue-prod'
-binding = 'USER_QUEUE'[
-    // wrangler.toml (staging)
-    [queues.consumers]
-]
-queue = 'user-queue-stage'
-binding = 'USER_QUEUE'
+```toml
+# wrangler.toml (production)
+[[queues.consumers]]
+queue = "user-queue-prod"
+binding = "USER_QUEUE"
+
+# wrangler.toml (staging)
+[[queues.consumers]]
+queue = "user-queue-stage"
+binding = "USER_QUEUE"
 ```
 
 Same code, different queue names - no changes needed! 🎉
