@@ -6,7 +6,6 @@ import type {
     Env,
     Handler,
     QueueConfig,
-    Bindings,
 } from './types'
 
 export class QueueRouter<E extends Env = Env> {
@@ -41,7 +40,10 @@ export class QueueRouter<E extends Env = Env> {
         }
     }
 
-    private resolveBindingFromQueueName(queueName: string, env?: E['Bindings']): string | undefined {
+    private resolveBindingFromQueueName(
+        queueName: string,
+        env?: E['Bindings']
+    ): string | undefined {
         const cached = this.queueToBinding.get(queueName)
         if (cached) return cached
 
