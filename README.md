@@ -65,16 +65,22 @@ export default {
 
 The queue name is resolved at runtime from `batch.queue`, so your code works across all environments:
 
-```typescript
-// wrangler.toml (production)
-;[[queues.consumers]]
-queue = 'user-queue-prod'
-binding = 'USER_QUEUE'[
-    // wrangler.toml (staging)
-    [queues.consumers]
-]
-queue = 'user-queue-stage'
-binding = 'USER_QUEUE'
+```jsonc
+// wrangler.jsonc (production)
+{
+    "queues": {
+        "consumers": [{ "queue": "user-queue-prod" }],
+        "producers": [{ "binding": "USER_QUEUE", "queue": "user-queue-prod" }]
+    }
+}
+
+// wrangler.jsonc (staging)
+{
+    "queues": {
+        "consumers": [{ "queue": "user-queue-stage" }],
+        "producers": [{ "binding": "USER_QUEUE", "queue": "user-queue-stage" }]
+    }
+}
 ```
 
 Same code, different queue names - no changes needed! 🎉
