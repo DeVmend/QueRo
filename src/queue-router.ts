@@ -8,46 +8,67 @@ import type {
     QueueConfig,
 } from './types'
 
-/**
- * A robust queue router that handles message processing for Cloudflare Queues
- * with support for both single and batch message processing.
- *
- * @template E - Environment type extending Env
- */
 export class QueueRouter<E extends Env = Env> {
     private readonly handlers = new Map<string, Handler<ActionMessage, E>>()
+    private readonly queueToBinding = new Map<string, string>()
 
-    constructor(protected readonly queues: Record<keyof E['Queues'], QueueConfig>) {}
+    constructor(
+        protected readonly queues?: Partial<Record<keyof E['Queues'], QueueConfig<E['Bindings']>>>
+    ) {}
 
-    /**
-     * Gets the configuration for a specific queue binding
-     * @param binding - The queue binding key
-     * @returns The queue configuration
-     * @throws Error if queue is not found
-     */
-    protected getQueueConfig(binding: keyof E['Queues']): QueueConfig {
-        const queue = this.queues[binding]
-        if (!queue) {
-            throw new Error(`Queue ${String(binding)} not found`)
+    private resolveQueueName(binding: keyof E['Queues'], env?: E['Bindings']): string | undefined {
+        const config = this.queues?.[binding]
+        if (!config?.name) return undefined
+
+        if (typeof config.name === 'function') {
+            return config.name(env ?? ({} as E['Bindings']))
         }
-        return queue
+        return config.name
+    }
+
+    private buildHandlerKey(binding: string, action: string): string {
+        return `${binding}:${action}`
     }
 
     /**
-     * Gets the name of a queue from its binding
-     * @param binding - The queue binding key
-     * @returns The queue name
+     * Registers the mapping from queue name to binding
+     * Called at runtime when we know the actual queue name
      */
-    protected getQueueName(binding: keyof E['Queues']): string {
-        return this.getQueueConfig(binding).name
+    private registerQueueBinding(queueName: string, binding: string): void {
+        if (!this.queueToBinding.has(queueName)) {
+            this.queueToBinding.set(queueName, binding)
+        }
     }
 
-    /**
-     * Internal method to add action handlers
-     */
+    private resolveBindingFromQueueName(
+        queueName: string,
+        env?: E['Bindings']
+    ): string | undefined {
+        const cached = this.queueToBinding.get(queueName)
+        if (cached) return cached
+
+        if (this.queues) {
+            for (const [binding, config] of Object.entries(this.queues)) {
+                if (!config?.name) continue
+
+                const resolvedName =
+                    typeof config.name === 'function'
+                        ? config.name(env ?? ({} as E['Bindings']))
+                        : config.name
+
+                if (resolvedName === queueName) {
+                    this.queueToBinding.set(queueName, binding)
+                    return binding
+                }
+            }
+        }
+
+        return undefined
+    }
+
     protected addAction<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -57,7 +78,7 @@ export class QueueRouter<E extends Env = Env> {
     ): this
     protected addAction<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -67,7 +88,7 @@ export class QueueRouter<E extends Env = Env> {
     ): this
     protected addAction<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -77,30 +98,19 @@ export class QueueRouter<E extends Env = Env> {
             | ((bodies: Extract<T, { action: A }>[]) => void),
         multi: boolean
     ) {
-        const key = this.buildHandlerKey(this.getQueueName(queue), action)
+        // Use binding key, not queue name
+        const key = this.buildHandlerKey(String(queue), action)
         const handlerConfig: Handler<ActionMessage, E> = multi
-            ? {
-                  type: 'multi',
-                  handle: handler as (bodies: ActionMessage[]) => void,
-              }
-            : {
-                  type: 'single',
-                  handle: handler as (body: ActionMessage) => void,
-              }
+            ? { type: 'multi', handle: handler as (bodies: ActionMessage[]) => void }
+            : { type: 'single', handle: handler as (body: ActionMessage) => void }
 
         this.handlers.set(key, handlerConfig)
         return this
     }
 
-    /**
-     * Registers a handler for processing single messages
-     * @param queue - The queue binding
-     * @param action - The action type to handle
-     * @param handler - The handler function for single messages
-     */
     action<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -114,15 +124,9 @@ export class QueueRouter<E extends Env = Env> {
         return this.addAction(queue, action, handler, false)
     }
 
-    /**
-     * Registers a handler for processing multiple messages in batch
-     * @param queue - The queue binding
-     * @param action - The action type to handle
-     * @param handler - The handler function for message batches
-     */
     batch<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -136,165 +140,139 @@ export class QueueRouter<E extends Env = Env> {
         return this.addAction(queue, action, handler, true)
     }
 
-    /**
-     * Builds a unique key for handler registration
-     * @param queueName - The queue name
-     * @param action - The action type
-     * @returns Unique handler key
-     */
-    private buildHandlerKey(queueName: string, action: string): string {
-        return `${queueName}:${action}`
-    }
-
-    /**
-     * Processes a single message, either immediately or adds it to batch collection
-     * @param queueName - The name of the queue
-     * @param message - The message to process
-     * @param messagesByAction - Map to collect messages for batch processing
-     * @param env - Environment bindings
-     * @param executionCtx - Execution context
-     */
     protected async processMessage(
-        queueName: string,
+        binding: string,
         message: { body: AllMessageTypes<E['Queues']> },
         messagesByAction: Map<string, AllMessageTypes<E['Queues']>[]>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
     ): Promise<void> {
-        try {
-            const action = message.body.action
-            const key = this.buildHandlerKey(queueName, action)
-            const handler = this.handlers.get(key)
+        const action = message.body.action
+        const key = this.buildHandlerKey(binding, action)
+        const handler = this.handlers.get(key)
 
-            if (!handler) {
-                console.warn(`No handler found for action: ${action} in queue: ${queueName}`)
-                return
-            }
-
-            if (handler.type === 'multi') {
-                this.collectMessageForBatch(key, message.body, messagesByAction)
-            } else {
-                await this.executeSingleHandler(handler, message.body, env, executionCtx)
-            }
-        } catch (error) {
-            console.error(`Error processing message in queue ${queueName}:`, error)
-            throw error
+        if (!handler) {
+            console.warn(`No handler found for action: ${action} in binding: ${binding}`)
+            return
         }
-    }
 
-    /**
-     * Executes a single message handler with error handling
-     * @param handler - The handler to execute
-     * @param body - The message body
-     * @param env - Environment bindings
-     * @param executionCtx - Execution context
-     */
-    private async executeSingleHandler(
-        handler: Extract<Handler<ActionMessage, E>, { type: 'single' }>,
-        body: AllMessageTypes<E['Queues']>,
-        env?: E['Bindings'],
-        executionCtx?: ExecutionContext
-    ): Promise<void> {
-        try {
-            await handler.handle(body, env, executionCtx)
-        } catch (error) {
-            console.error('Error in action handler:', error)
-            throw error // Re-throw to allow queue retry mechanism
-        }
-    }
-
-    /**
-     * Collects messages for batch processing
-     * @param key - The handler key
-     * @param body - The message body
-     * @param messagesByAction - Map to store messages by action
-     */
-    private collectMessageForBatch(
-        key: string,
-        body: AllMessageTypes<E['Queues']>,
-        messagesByAction: Map<string, AllMessageTypes<E['Queues']>[]>
-    ): void {
-        const messages = messagesByAction.get(key)
-        if (messages) {
-            messages.push(body)
+        if (handler.type === 'multi') {
+            const messages = messagesByAction.get(key) ?? []
+            messages.push(message.body)
+            messagesByAction.set(key, messages)
         } else {
-            messagesByAction.set(key, [body])
+            await handler.handle(message.body, env, executionCtx)
         }
     }
 
-    /**
-     * Processes all collected multi-handlers with their batched messages
-     * @param messagesByAction - Map of messages grouped by action
-     * @param env - Environment bindings
-     * @param executionCtx - Execution context
-     */
     private async processMultiHandlers(
         messagesByAction: Map<string, AllMessageTypes<E['Queues']>[]>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
     ): Promise<void> {
         for (const [key, bodies] of messagesByAction) {
-            try {
-                const handler = this.handlers.get(key)
-                if (!handler) {
-                    console.warn(`Handler not found for key: ${key}`)
-                    continue
-                }
-
-                if (handler.type === 'multi' && bodies.length > 0) {
-                    await handler.handle(bodies, env, executionCtx)
-                }
-            } catch (error) {
-                console.error(`Error in batch handler for key ${key}:`, error)
-                throw error // Re-throw to allow queue retry mechanism
+            const handler = this.handlers.get(key)
+            if (handler?.type === 'multi' && bodies.length > 0) {
+                await handler.handle(bodies, env, executionCtx)
             }
         }
     }
 
-    /**
-     * Processes a batch of messages from a queue
-     * @param batch - The message batch to process
-     * @param env - Environment bindings
-     * @param executionCtx - Execution context
-     */
+    private findBindingForQueue(queueName: string, env?: E['Bindings']): string | undefined {
+        const cached = this.resolveBindingFromQueueName(queueName, env)
+        if (cached) return cached
+
+        // Get unique bindings from registered handlers
+        const bindings = new Set<string>()
+        for (const key of this.handlers.keys()) {
+            const binding = key.split(':')[0]
+            if (binding) bindings.add(binding)
+        }
+
+        // Only auto-map if there's exactly one binding registered
+        if (bindings.size === 1) {
+            const binding = bindings.values().next().value
+            if (binding) {
+                this.registerQueueBinding(queueName, binding)
+                return binding
+            }
+        }
+
+        // Multiple bindings: warn and require explicit mapping
+        if (bindings.size > 1) {
+            console.warn(
+                `Multiple bindings registered (${[...bindings].join(', ')}). ` +
+                    `Cannot auto-map queue "${queueName}". Use mapQueue() or provide queue config.`
+            )
+        }
+
+        return undefined
+    }
+
     protected async processBatch(
         batch: MessageBatch<AllMessageTypes<E['Queues']>>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
     ): Promise<void> {
         const queueName = batch.queue
-        const messagesByAction = new Map<string, AllMessageTypes<E['Queues']>[]>()
+        const binding = this.findBindingForQueue(queueName, env)
 
-        // Process all individual messages
-        for (const message of batch.messages) {
-            await this.processMessage(queueName, message, messagesByAction, env, executionCtx)
-            message.ack()
+        if (!binding) {
+            console.warn(`No binding found for queue: ${queueName}`)
+            // Retry all messages if no binding found
+            for (const message of batch.messages) {
+                message.retry()
+            }
+            return
         }
 
-        // Process all collected multi-handlers
-        await this.processMultiHandlers(messagesByAction, env, executionCtx)
+        const messagesByAction = new Map<string, AllMessageTypes<E['Queues']>[]>()
+        const processedMessages: { ack: () => void; retry: () => void }[] = []
+
+        for (const message of batch.messages) {
+            try {
+                await this.processMessage(binding, message, messagesByAction, env, executionCtx)
+                processedMessages.push(message)
+            } catch (error) {
+                console.error(`Error processing message:`, error)
+                message.retry()
+            }
+        }
+
+        // Process batch handlers and ack only after all handlers complete successfully
+        try {
+            await this.processMultiHandlers(messagesByAction, env, executionCtx)
+            // Ack all successfully processed messages
+            for (const message of processedMessages) {
+                message.ack()
+            }
+        } catch (error) {
+            console.error(`Error in batch handler:`, error)
+            // Retry all messages if batch handler fails
+            for (const message of processedMessages) {
+                message.retry()
+            }
+        }
     }
 
     /**
-     * Main entry point for queue message processing
-     * @param batch - The message batch
-     * @param env - Environment bindings or object
-     * @param executionCtx - Execution context
+     * Register a queue name to binding mapping explicitly
+     * Useful when you know the queue name at startup
      */
+    mapQueue(queueName: string, binding: keyof E['Queues']): this {
+        this.queueToBinding.set(queueName, String(binding))
+        return this
+    }
+
     async queue(
         batch: MessageBatch<unknown>,
         env?: E['Bindings'] | object,
         executionCtx?: ExecutionContext
     ): Promise<void> {
-        try {
-            await this.processBatch(
-                batch as MessageBatch<AllMessageTypes<E['Queues']>>,
-                env,
-                executionCtx
-            )
-        } catch (error) {
-            console.error('Fatal error processing queue batch:', error)
-            throw error // Re-throw to allow queue retry mechanism
-        }
+        await this.processBatch(
+            batch as MessageBatch<AllMessageTypes<E['Queues']>>,
+            env as E['Bindings'],
+            executionCtx
+        )
     }
 }

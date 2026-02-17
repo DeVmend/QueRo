@@ -34,6 +34,7 @@ coverage/
 *.tmp
 *.temp
 .temp/
+.wrangler/
 
 # Logs
 logs

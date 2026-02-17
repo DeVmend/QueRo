@@ -60,6 +60,7 @@
     "engines": {
         "node": ">=18.0.0"
     },
+    "packageManager": "pnpm@10.29.3",
     "directories": {
         "example": "examples",
         "test": "tests"
