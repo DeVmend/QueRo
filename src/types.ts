@@ -25,8 +25,8 @@ export type AllMessageTypes<Queues extends Record<string, ActionQueue<ActionMess
  * Queue configuration - now optional
  * If name is not provided, routing is done by binding key
  */
-export type QueueConfig = {
-    name?: string | ((env: Bindings) => string)
+export type QueueConfig<B = Bindings> = {
+    name?: string | ((env: B) => string)
 }
 
 export type Handler<T extends ActionMessage, E extends Env> =
