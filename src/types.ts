@@ -47,15 +47,5 @@ export type Handler<T extends ActionMessage, E extends Env> =
           ) => void | Promise<void>
       }
 
-export type ProcessingResult = {
-    success: boolean
-    error?: Error
-    messagesProcessed: number
-    handlersExecuted: number
-}
-
-export type QueueProcessingOptions = {
-    enableLogging?: boolean
-    maxRetries?: number
-    continueOnError?: boolean
-}
+// Future: ProcessingResult and QueueProcessingOptions types
+// will be added when advanced error handling is implemented

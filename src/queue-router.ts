@@ -176,12 +176,28 @@ export class QueueRouter<E extends Env = Env> {
         const cached = this.resolveBindingFromQueueName(queueName, env)
         if (cached) return cached
 
+        // Get unique bindings from registered handlers
+        const bindings = new Set<string>()
         for (const key of this.handlers.keys()) {
-            const handlerBinding = key.split(':')[0]
-            if (handlerBinding) {
-                this.registerQueueBinding(queueName, handlerBinding)
-                return handlerBinding
+            const binding = key.split(':')[0]
+            if (binding) bindings.add(binding)
+        }
+
+        // Only auto-map if there's exactly one binding registered
+        if (bindings.size === 1) {
+            const binding = bindings.values().next().value
+            if (binding) {
+                this.registerQueueBinding(queueName, binding)
+                return binding
             }
+        }
+
+        // Multiple bindings: warn and require explicit mapping
+        if (bindings.size > 1) {
+            console.warn(
+                `Multiple bindings registered (${[...bindings].join(', ')}). ` +
+                    `Cannot auto-map queue "${queueName}". Use mapQueue() or provide queue config.`
+            )
         }
 
         return undefined
@@ -197,17 +213,40 @@ export class QueueRouter<E extends Env = Env> {
 
         if (!binding) {
             console.warn(`No binding found for queue: ${queueName}`)
+            // Retry all messages if no binding found
+            for (const message of batch.messages) {
+                message.retry()
+            }
             return
         }
 
         const messagesByAction = new Map<string, AllMessageTypes<E['Queues']>[]>()
+        const processedMessages: { ack: () => void; retry: () => void }[] = []
 
         for (const message of batch.messages) {
-            await this.processMessage(binding, message, messagesByAction, env, executionCtx)
-            message.ack()
+            try {
+                await this.processMessage(binding, message, messagesByAction, env, executionCtx)
+                processedMessages.push(message)
+            } catch (error) {
+                console.error(`Error processing message:`, error)
+                message.retry()
+            }
         }
 
-        await this.processMultiHandlers(messagesByAction, env, executionCtx)
+        // Process batch handlers and ack only after all handlers complete successfully
+        try {
+            await this.processMultiHandlers(messagesByAction, env, executionCtx)
+            // Ack all successfully processed messages
+            for (const message of processedMessages) {
+                message.ack()
+            }
+        } catch (error) {
+            console.error(`Error in batch handler:`, error)
+            // Retry all messages if batch handler fails
+            for (const message of processedMessages) {
+                message.retry()
+            }
+        }
     }
 
     /**
