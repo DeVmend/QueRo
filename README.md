@@ -30,7 +30,7 @@ pnpm install @devmend/que-ro
 import { QueueRouter } from '@devmend/que-ro'
 
 // Define your message types
-type UserActions = 
+type UserActions =
     | { action: 'new-user'; userId: string; email: string }
     | { action: 'delete-user'; userId: string }
 
@@ -48,7 +48,10 @@ queueRouter
         console.log('New user:', message.userId)
     })
     .batch('USER_QUEUE', 'delete-user', async (messages, env) => {
-        console.log('Delete users:', messages.map(m => m.userId))
+        console.log(
+            'Delete users:',
+            messages.map(m => m.userId)
+        )
     })
 
 export default {
@@ -64,14 +67,14 @@ The queue name is resolved at runtime from `batch.queue`, so your code works acr
 
 ```typescript
 // wrangler.toml (production)
-[[queues.consumers]]
-queue = "user-queue-prod"
-binding = "USER_QUEUE"
-
-// wrangler.toml (staging)  
-[[queues.consumers]]
-queue = "user-queue-stage"
-binding = "USER_QUEUE"
+;[[queues.consumers]]
+queue = 'user-queue-prod'
+binding = 'USER_QUEUE'[
+    // wrangler.toml (staging)
+    [queues.consumers]
+]
+queue = 'user-queue-stage'
+binding = 'USER_QUEUE'
 ```
 
 Same code, different queue names - no changes needed! 🎉
@@ -83,12 +86,12 @@ If you need explicit control, you can still map queue names to bindings:
 ```typescript
 // Option 1: Static mapping
 const router = new QueueRouter<{ Queues: Queues }>({
-    USER_QUEUE: { name: 'user-queue-prod' }
+    USER_QUEUE: { name: 'user-queue-prod' },
 })
 
 // Option 2: Dynamic from environment
 const router = new QueueRouter<{ Queues: Queues; Bindings: Env }>({
-    USER_QUEUE: { name: (env) => `user-queue-${env.STAGE}` }
+    USER_QUEUE: { name: env => `user-queue-${env.STAGE}` },
 })
 
 // Option 3: Runtime mapping
@@ -100,6 +103,7 @@ const router = new QueueRouter<{ Queues: Queues }>()
 ## API
 
 ### `action(binding, action, handler)`
+
 Registers a handler that processes each message individually.
 
 ```typescript
@@ -109,6 +113,7 @@ router.action('USER_QUEUE', 'new-user', (message, env, ctx) => {
 ```
 
 ### `batch(binding, action, handler)`
+
 Registers a handler that processes all messages of an action type together.
 
 ```typescript
@@ -118,6 +123,7 @@ router.batch('USER_QUEUE', 'new-user', (messages, env, ctx) => {
 ```
 
 ### `mapQueue(queueName, binding)`
+
 Explicitly maps a queue name to a binding (useful for complex setups).
 
 ```typescript
@@ -125,13 +131,14 @@ router.mapQueue('my-custom-queue-name', 'USER_QUEUE')
 ```
 
 ### `queue(batch, env, ctx)`
+
 Main entry point - call this from your Worker's queue handler.
 
 ```typescript
 export default {
     async queue(batch, env, ctx) {
         await router.queue(batch, env, ctx)
-    }
+    },
 }
 ```
 

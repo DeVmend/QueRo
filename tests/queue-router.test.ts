@@ -11,9 +11,16 @@ class FakeMessageCollector {
     messages: unknown[] = []
     batches: unknown[][] = []
 
-    single = (body: unknown) => { this.messages.push(body) }
-    multi = (bodies: unknown[]) => { this.batches.push(bodies) }
-    clear() { this.messages = []; this.batches = [] }
+    single = (body: unknown) => {
+        this.messages.push(body)
+    }
+    multi = (bodies: unknown[]) => {
+        this.batches.push(bodies)
+    }
+    clear() {
+        this.messages = []
+        this.batches = []
+    }
 }
 
 function createBatch(queueName: string, messages: { action: string; [key: string]: unknown }[]) {
@@ -44,14 +51,12 @@ describe('QueueRouter', () => {
             router.action('TEST_QUEUE', 'test-action', collector.single)
 
             const batch = createBatch('any-queue-name-prod', [
-                { action: 'test-action', data: 'hello' }
+                { action: 'test-action', data: 'hello' },
             ])
 
             await router.queue(batch as any)
 
-            expect(collector.messages).toEqual([
-                { action: 'test-action', data: 'hello' }
-            ])
+            expect(collector.messages).toEqual([{ action: 'test-action', data: 'hello' }])
         })
 
         it('should support explicit queue mapping', async () => {
@@ -59,15 +64,11 @@ describe('QueueRouter', () => {
                 .mapQueue('user-queue-stage', 'USER_QUEUE')
                 .action('USER_QUEUE', 'create-user', collector.single)
 
-            const batch = createBatch('user-queue-stage', [
-                { action: 'create-user', userId: 'u1' }
-            ])
+            const batch = createBatch('user-queue-stage', [{ action: 'create-user', userId: 'u1' }])
 
             await router.queue(batch as any)
 
-            expect(collector.messages).toEqual([
-                { action: 'create-user', userId: 'u1' }
-            ])
+            expect(collector.messages).toEqual([{ action: 'create-user', userId: 'u1' }])
         })
     })
 
@@ -82,9 +83,7 @@ describe('QueueRouter', () => {
         it('should route by queue name when config provided', async () => {
             router.action('TEST_QUEUE', 'test-action', collector.single)
 
-            const batch = createBatch('test-queue', [
-                { action: 'test-action', data: 'test' }
-            ])
+            const batch = createBatch('test-queue', [{ action: 'test-action', data: 'test' }])
 
             await router.queue(batch as any)
 
@@ -97,20 +96,18 @@ describe('QueueRouter', () => {
             type Env = { STAGE: string }
 
             router = new QueueRouter<{ Queues: TestQueues; Bindings: Env }>({
-                TEST_QUEUE: { name: (env) => `test-queue-${(env as Env).STAGE}` },
+                TEST_QUEUE: { name: env => `test-queue-${(env as Env).STAGE}` },
             })
 
             router.action('TEST_QUEUE', 'test-action', collector.single)
 
             const batch = createBatch('test-queue-prod', [
-                { action: 'test-action', data: 'dynamic' }
+                { action: 'test-action', data: 'dynamic' },
             ])
 
             await router.queue(batch as any, { STAGE: 'prod' })
 
-            expect(collector.messages).toEqual([
-                { action: 'test-action', data: 'dynamic' }
-            ])
+            expect(collector.messages).toEqual([{ action: 'test-action', data: 'dynamic' }])
         })
     })
 

@@ -46,10 +46,9 @@ export class QueueRouter<E extends Env = Env> {
         if (this.queues) {
             for (const [binding, config] of Object.entries(this.queues)) {
                 if (!config?.name) continue
-                
-                const resolvedName = typeof config.name === 'function'
-                    ? config.name(env ?? {})
-                    : config.name
+
+                const resolvedName =
+                    typeof config.name === 'function' ? config.name(env ?? {}) : config.name
 
                 if (resolvedName === queueName) {
                     this.queueToBinding.set(queueName, binding)
@@ -195,7 +194,7 @@ export class QueueRouter<E extends Env = Env> {
     ): Promise<void> {
         const queueName = batch.queue
         const binding = this.findBindingForQueue(queueName, env)
-        
+
         if (!binding) {
             console.warn(`No binding found for queue: ${queueName}`)
             return
