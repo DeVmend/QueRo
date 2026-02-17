@@ -15,19 +15,19 @@
             {
                 "queue": "user-queue-production",
             },
-            {
-                "queue": "maile-queue-production",
-            },
+            // {
+            //     "queue": "mail-queue-production",
+            // },
         ],
         "producers": [
             {
                 "binding": "USER_QUEUE",
                 "queue": "user-queue-production",
             },
-            {
-                "binding": "MAIL_QUEUE",
-                "queue": "maile-queue-production",
-            },
+            // {
+            //     "binding": "MAIL_QUEUE",
+            //     "queue": "mail-queue-production",
+            // },
         ],
     },
     "vars": {
@@ -43,19 +43,19 @@
                     {
                         "queue": "user-queue-stage",
                     },
-                    {
-                        "queue": "maile-queue-stage",
-                    },
+                    // {
+                    //     "queue": "mail-queue-stage",
+                    // },
                 ],
                 "producers": [
                     {
                         "binding": "USER_QUEUE",
                         "queue": "user-queue-stage",
                     },
-                    {
-                        "binding": "MAIL_QUEUE",
-                        "queue": "maile-queue-stage",
-                    },
+                    // {
+                    //     "binding": "MAIL_QUEUE",
+                    //     "queue": "mail-queue-stage",
+                    // },
                 ],
             },
         },
