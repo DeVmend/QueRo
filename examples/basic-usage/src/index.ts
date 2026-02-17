@@ -1,11 +1,14 @@
 import { QueueRouter } from '../../../src/index'
 
-type Environment = {
-    KV: KVNamespace // Some example binding
-    // ...
-} & Queues
+// 👇 Message types for type-safe queue handling
 
-// 👇 define your message types by actions
+type MailActions = {
+    action: 'send-mail'
+    to: string
+    subject: string
+    body: string
+}
+
 type NewUser = {
     action: 'new-user'
     userId: string
@@ -17,25 +20,38 @@ type DeleteUser = {
 }
 type UserActions = NewUser | DeleteUser
 
-// 👇 define your queues with their actions
+// 👇 Queue types for QueRo (extends the generated Env from worker-configuration.d.ts)
 type Queues = {
     USER_QUEUE: Queue<UserActions>
+    MAIL_QUEUE: Queue<MailActions>
 }
 
-// 👇 create a queue router specify his Binding
-const queueRouter = new QueueRouter<{ Bindings: Environment; Queues: Queues }>()
+// 👇 Create base queue router
+// const queueRouter = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
 
-// 👇 add actions to the queue like defining api routes and handle them type safe
+// 👇 Acces dynamic environment specific queue names
+const queueRouter = new QueueRouter<{ Bindings: Env; Queues: Queues }>({
+    USER_QUEUE: {
+        name: env => `user-queue-${env.ENV_NAME}`,
+    },
+    MAIL_QUEUE: {
+        name: env => `mail-queue-${env.ENV_NAME}`,
+    },
+})
+
+// 👇 Register handlers with full type safety
 queueRouter
     .batch('USER_QUEUE', 'new-user', async messages => {
-        console.log(messages) // 👈 get array of messages as configured size in wrangler.json
+        console.log('New users:', messages)
     })
     .action('USER_QUEUE', 'delete-user', async message => {
-        console.log(message) // 👈 callback handles every message by action on his own
+        console.log('Delete user:', message.userId)
+    })
+    .action('MAIL_QUEUE', 'send-mail', async message => {
+        console.log('Send mail:', message.to, message.subject, message.body)
     })
 
 export default {
-    // 👇 example fetch handler for testing
     async fetch(req, env): Promise<Response> {
         // Ignore favicon requests
         if (req.url.includes('favicon')) {
@@ -43,22 +59,22 @@ export default {
         }
 
         await env.USER_QUEUE.send({
-            action: 'delete-user',
-            userId: '1337',
-        })
-
-        await env.USER_QUEUE.send({
             action: 'new-user',
-            userId: '1337',
+            userId: 'foo',
             email: 'foo@bar.com',
         })
-        return new Response('Sent message to the queue')
-    },
-    // 👇 "link" the queue router to the queue
-    async queue(batch, env): Promise<void> {
-        queueRouter.queue(batch, env)
-    },
-} satisfies ExportedHandler<Environment, Error>
 
-// 👇 also possible to export the queue router directly if no other handlers are needed
-// export default queueRouter;
+        await env.MAIL_QUEUE.send({
+            action: 'send-mail',
+            to: 'foo@bar.com',
+            subject: 'Hello',
+            body: 'Hello, world!',
+        })
+
+        return new Response(`Sent message to queue (env: ${env.ENV_NAME})`)
+    },
+
+    async queue(batch, env): Promise<void> {
+        await queueRouter.queue(batch, env)
+    },
+} satisfies ExportedHandler<Env>
