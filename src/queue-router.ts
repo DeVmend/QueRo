@@ -13,14 +13,16 @@ export class QueueRouter<E extends Env = Env> {
     private readonly handlers = new Map<string, Handler<ActionMessage, E>>()
     private readonly queueToBinding = new Map<string, string>()
 
-    constructor(protected readonly queues?: Partial<Record<keyof E['Queues'], QueueConfig>>) {}
+    constructor(
+        protected readonly queues?: Partial<Record<keyof E['Queues'], QueueConfig<E['Bindings']>>>
+    ) {}
 
-    private resolveQueueName(binding: keyof E['Queues'], env?: Bindings): string | undefined {
+    private resolveQueueName(binding: keyof E['Queues'], env?: E['Bindings']): string | undefined {
         const config = this.queues?.[binding]
         if (!config?.name) return undefined
 
         if (typeof config.name === 'function') {
-            return config.name(env ?? {})
+            return config.name(env ?? ({} as E['Bindings']))
         }
         return config.name
     }
@@ -39,7 +41,7 @@ export class QueueRouter<E extends Env = Env> {
         }
     }
 
-    private resolveBindingFromQueueName(queueName: string, env?: Bindings): string | undefined {
+    private resolveBindingFromQueueName(queueName: string, env?: E['Bindings']): string | undefined {
         const cached = this.queueToBinding.get(queueName)
         if (cached) return cached
 
@@ -48,7 +50,9 @@ export class QueueRouter<E extends Env = Env> {
                 if (!config?.name) continue
 
                 const resolvedName =
-                    typeof config.name === 'function' ? config.name(env ?? {}) : config.name
+                    typeof config.name === 'function'
+                        ? config.name(env ?? ({} as E['Bindings']))
+                        : config.name
 
                 if (resolvedName === queueName) {
                     this.queueToBinding.set(queueName, binding)
@@ -172,7 +176,7 @@ export class QueueRouter<E extends Env = Env> {
         }
     }
 
-    private findBindingForQueue(queueName: string, env?: Bindings): string | undefined {
+    private findBindingForQueue(queueName: string, env?: E['Bindings']): string | undefined {
         const cached = this.resolveBindingFromQueueName(queueName, env)
         if (cached) return cached
 
