@@ -62,7 +62,7 @@ export class QueueRouter<E extends Env = Env> {
 
     protected addAction<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -72,7 +72,7 @@ export class QueueRouter<E extends Env = Env> {
     ): this
     protected addAction<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -82,7 +82,7 @@ export class QueueRouter<E extends Env = Env> {
     ): this
     protected addAction<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -104,7 +104,7 @@ export class QueueRouter<E extends Env = Env> {
 
     action<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,
@@ -120,7 +120,7 @@ export class QueueRouter<E extends Env = Env> {
 
     batch<
         Q extends keyof E['Queues'],
-        T extends ActionsOfQueue<E['Queues'][Q]>,
+        T extends ActionsOfQueue<E['Queues'][Q]> & ActionMessage,
         A extends T['action'],
     >(
         queue: Q,

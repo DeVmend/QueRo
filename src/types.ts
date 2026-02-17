@@ -15,7 +15,7 @@ export type ActionMessage = Record<string, unknown> & { action: string }
 export type ActionQueue<T extends ActionMessage> = Queue<T>
 
 export type ActionsOfQueue<Q extends ActionQueue<ActionMessage>> =
-    Q extends ActionQueue<infer T> ? T : never
+    Q extends ActionQueue<infer T extends ActionMessage> ? T : never
 
 export type AllMessageTypes<Queues extends Record<string, ActionQueue<ActionMessage>>> = {
     [K in keyof Queues]: ActionsOfQueue<Queues[K]>
