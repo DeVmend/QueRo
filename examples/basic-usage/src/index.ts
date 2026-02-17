@@ -39,19 +39,17 @@ queueRouter
 export default {
 	// 👇 example fetch handler for testing
 	async fetch(req, env): Promise<Response> {
-		const url = new URL(req.url);
-		
-		// Only send message for explicit /send path
-		if (url.pathname === '/send') {
-			await env.USER_QUEUE.send({
-				action: 'new-user',
-				userId: 'foo',
-				email: 'foo@bar.com',
-			});
-			return new Response('Sent message to the queue');
+		// Ignore favicon requests
+		if (req.url.includes('favicon')) {
+			return new Response(null, { status: 204 });
 		}
 		
-		return new Response('Use /send to queue a message');
+		await env.USER_QUEUE.send({
+			action: 'new-user',
+			userId: 'foo',
+			email: 'foo@bar.com',
+		});
+		return new Response('Sent message to the queue');
 	},
 	// 👇 "link" the queue router to the queue
 	async queue(batch, env): Promise<void> {
