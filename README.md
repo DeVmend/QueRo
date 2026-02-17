@@ -13,9 +13,10 @@
 A modern, type-safe queue routing library for Cloudflare Workers with TypeScript support.
 
 - 🚀 **Modern TypeScript** - Full type safety and IntelliSense support
-- 🔄 **Flexible Routing** - Route messages to different handlers based on queue names and actions
+- 🔄 **Flexible Routing** - Route messages to different handlers based on bindings and actions
 - 🪶 **Lightweight** - No dependencies, optimized for Cloudflare Workers
 - 📝 **Great DX** - Intuitive API with excellent developer experience
+- 🌍 **Environment-agnostic** - Works across prod, staging, dev without config changes
 
 ## Installation
 
@@ -26,83 +27,122 @@ pnpm install @devmend/que-ro
 ## Quick Start
 
 ```typescript
-// index.ts
-
 import { QueueRouter } from '@devmend/que-ro'
 
-// 👇 define your message types by actions
-type NewUser = {
-    action: 'new-user'
-    userId: string
-    email: string
-}
-type DeleteUser = {
-    action: 'delete-user'
-    userId: string
-}
-type UserActions = NewUser | DeleteUser
+// Define your message types
+type UserActions = 
+    | { action: 'new-user'; userId: string; email: string }
+    | { action: 'delete-user'; userId: string }
 
-// 👇 define your queues with their actions
+// Define your queues
 type Queues = {
     USER_QUEUE: Queue<UserActions>
 }
 
-// 👇 create a queue router specify his Binding and name as configured in wrangler.json
-const queueRouter = new QueueRouter<{ Bindings: Environment; Queues: Queues }>({
-    USER_QUEUE: { name: 'user-queue' },
-})
+// Create router - no queue names needed!
+const queueRouter = new QueueRouter<{ Queues: Queues }>()
 
-// 👇 add actions to the queue like defining api routes and handle them type safe
+// Register handlers by binding name
 queueRouter
-    .action('USER_QUEUE', 'new-user', async messages => {
-        console.log(messages) // 👈 get array of messages as configured size in wrangler.json
+    .action('USER_QUEUE', 'new-user', async (message, env) => {
+        console.log('New user:', message.userId)
     })
-    .singleMessageAction('USER_QUEUE', 'delete-user', async message => {
-        console.log(message) // 👈 callback handles every message by action on his own
+    .batch('USER_QUEUE', 'delete-user', async (messages, env) => {
+        console.log('Delete users:', messages.map(m => m.userId))
     })
 
 export default {
-    async fetch(req, env): Promise<Response> {
-        // example fetch handler for testing
-        env.USER_QUEUE.send({
-            action: 'new-user',
-            userId: 'foo',
-            email: 'foo@bar.com',
-        })
-        return new Response('Sent message to the queue')
-    },
-    // 👇 "link" the queue router to the queue
-    async queue(batch, env): Promise<void> {
+    async queue(batch, env) {
         await queueRouter.queue(batch, env)
     },
-} satisfies ExportedHandler<Environment, Error>
-
-// 👇 also possible to export the queue router directly if no other handlers are needed
-// export default queueRouter;
+}
 ```
 
-## API Documentation
+## Multi-Environment Support
+
+The queue name is resolved at runtime from `batch.queue`, so your code works across all environments:
+
+```typescript
+// wrangler.toml (production)
+[[queues.consumers]]
+queue = "user-queue-prod"
+binding = "USER_QUEUE"
+
+// wrangler.toml (staging)  
+[[queues.consumers]]
+queue = "user-queue-stage"
+binding = "USER_QUEUE"
+```
+
+Same code, different queue names - no changes needed! 🎉
+
+### Explicit Queue Mapping
+
+If you need explicit control, you can still map queue names to bindings:
+
+```typescript
+// Option 1: Static mapping
+const router = new QueueRouter<{ Queues: Queues }>({
+    USER_QUEUE: { name: 'user-queue-prod' }
+})
+
+// Option 2: Dynamic from environment
+const router = new QueueRouter<{ Queues: Queues; Bindings: Env }>({
+    USER_QUEUE: { name: (env) => `user-queue-${env.STAGE}` }
+})
+
+// Option 3: Runtime mapping
+const router = new QueueRouter<{ Queues: Queues }>()
+    .mapQueue('user-queue-prod', 'USER_QUEUE')
+    .mapQueue('user-queue-stage', 'USER_QUEUE')
+```
+
+## API
+
+### `action(binding, action, handler)`
+Registers a handler that processes each message individually.
+
+```typescript
+router.action('USER_QUEUE', 'new-user', (message, env, ctx) => {
+    // Called once per message
+})
+```
+
+### `batch(binding, action, handler)`
+Registers a handler that processes all messages of an action type together.
+
+```typescript
+router.batch('USER_QUEUE', 'new-user', (messages, env, ctx) => {
+    // Called once with all messages of this action
+})
+```
+
+### `mapQueue(queueName, binding)`
+Explicitly maps a queue name to a binding (useful for complex setups).
+
+```typescript
+router.mapQueue('my-custom-queue-name', 'USER_QUEUE')
+```
+
+### `queue(batch, env, ctx)`
+Main entry point - call this from your Worker's queue handler.
+
+```typescript
+export default {
+    async queue(batch, env, ctx) {
+        await router.queue(batch, env, ctx)
+    }
+}
+```
 
 ## Development
 
 ```bash
-# Install dependencies
-pnpm install
-
-# Run tests
-pnpm test
-
-# Build the library
-pnpm run build
-
-# Run tests in watch mode
-pnpm run test:watch
-
-# Lint code
-pnpm run lint
-
-# Format code
-pnpm run format
+pnpm install    # Install dependencies
+pnpm test       # Run tests
+pnpm run build  # Build the library
+pnpm run lint   # Lint code
+pnpm run format # Format code
 ```
 
 ## License
