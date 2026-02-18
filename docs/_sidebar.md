@@ -5,6 +5,7 @@
   - [Single Queue](guide/single-queue.md)
   - [Multiple Queues](guide/multiple-queues.md)
   - [Batch Processing](guide/batch-processing.md)
+  - [Error Handling](guide/error-handling.md)
   - [Dynamic Queue Names](guide/dynamic-queue-names.md)
 
 - API
