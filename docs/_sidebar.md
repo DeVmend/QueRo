@@ -2,7 +2,6 @@
 - [Quick Start](getting-started/quick-start.md)
 
 - Guide
-  - [Single Queue](guide/single-queue.md)
   - [Multiple Queues](guide/multiple-queues.md)
   - [Batch Processing](guide/batch-processing.md)
   - [Error Handling](guide/error-handling.md)

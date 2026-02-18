@@ -15,43 +15,16 @@
 npm install quero
 ```
 
-## Quick Example
+## Example
 
 ```typescript
-import { QueueRouter } from 'quero'
-
-// Define your message types
-type NewUser = { action: 'new-user'; userId: string; email: string }
-type DeleteUser = { action: 'delete-user'; userId: string }
-type UserMessage = NewUser | DeleteUser
-
-// Define your queues
-type Queues = {
-  USER_QUEUE: Queue<UserMessage>
-}
-
-// Create the router
 const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
   .action('USER_QUEUE', 'new-user', async (msg) => {
-    console.log(`User created: ${msg.email}`)
+    console.log(`Welcome ${msg.email}!`)
   })
   .action('USER_QUEUE', 'delete-user', async (msg) => {
-    console.log(`User deleted: ${msg.userId}`)
+    console.log(`Goodbye ${msg.userId}`)
   })
-
-// Wire up your worker
-export default {
-  async queue(batch, env) {
-    await router.queue(batch, env)
-  }
-}
 ```
-
-## How It Works
-
-1. Define message types with an `action` field as discriminator
-2. Create a `Queues` type mapping binding names to queue types
-3. Register handlers with `.action()` or `.batch()`
-4. Call `router.queue(batch, env)` in your queue handler
 
 [Get started →](getting-started/quick-start.md)

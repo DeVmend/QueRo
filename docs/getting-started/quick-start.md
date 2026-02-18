@@ -8,9 +8,9 @@ Get up and running with quero in 5 minutes.
 npm install quero
 ```
 
-## 2. Define Your Message Types
+## 2. Define Message Types
 
-Every message needs an `action` field. Use a union type for multiple actions:
+Every message needs an `action` field:
 
 ```typescript
 type NewUser = { action: 'new-user'; userId: string; email: string }
@@ -18,9 +18,9 @@ type DeleteUser = { action: 'delete-user'; userId: string }
 type UserMessage = NewUser | DeleteUser
 ```
 
-## 3. Define Your Queues
+## 3. Define Queue Bindings
 
-Map your Cloudflare queue bindings to their message types:
+Map your Cloudflare queue bindings to message types:
 
 ```typescript
 type Queues = {
@@ -28,31 +28,21 @@ type Queues = {
 }
 ```
 
-## 4. Create the Router
+## 4. Create Router & Register Handlers
 
 ```typescript
 import { QueueRouter } from 'quero'
 
 const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
+  .action('USER_QUEUE', 'new-user', async (msg, env) => {
+    console.log(`Welcome ${msg.email}!`)
+  })
+  .action('USER_QUEUE', 'delete-user', async (msg, env) => {
+    console.log(`Goodbye ${msg.userId}`)
+  })
 ```
 
-## 5. Register Handlers
-
-Use `.action()` to handle messages one at a time:
-
-```typescript
-router.action('USER_QUEUE', 'new-user', async (msg, env) => {
-  // msg is typed as { action: 'new-user'; userId: string; email: string }
-  console.log(`Welcome ${msg.email}!`)
-})
-
-router.action('USER_QUEUE', 'delete-user', async (msg, env) => {
-  // msg is typed as { action: 'delete-user'; userId: string }
-  console.log(`Goodbye ${msg.userId}`)
-})
-```
-
-## 6. Wire Up Your Worker
+## 5. Export Worker
 
 ```typescript
 export default {
@@ -60,6 +50,17 @@ export default {
     await router.queue(batch, env)
   }
 } satisfies ExportedHandler<Env>
+```
+
+## 6. Configure Wrangler
+
+```json
+{
+  "queues": {
+    "producers": [{ "binding": "USER_QUEUE", "queue": "user-queue" }],
+    "consumers": [{ "queue": "user-queue" }]
+  }
+}
 ```
 
 ## 7. Send Messages
@@ -72,69 +73,8 @@ await env.USER_QUEUE.send({
 })
 ```
 
-## Complete Example
-
-```typescript
-import { QueueRouter } from 'quero'
-
-// Message types
-type NewUser = { action: 'new-user'; userId: string; email: string }
-type DeleteUser = { action: 'delete-user'; userId: string }
-type UserMessage = NewUser | DeleteUser
-
-// Queue bindings
-type Queues = {
-  USER_QUEUE: Queue<UserMessage>
-}
-
-// Router
-const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
-  .action('USER_QUEUE', 'new-user', async (msg) => {
-    console.log(`User created: ${msg.email}`)
-  })
-  .action('USER_QUEUE', 'delete-user', async (msg) => {
-    console.log(`User deleted: ${msg.userId}`)
-  })
-
-// Worker
-export default {
-  async fetch(req, env) {
-    await env.USER_QUEUE.send({
-      action: 'new-user',
-      userId: '123',
-      email: 'user@example.com'
-    })
-    return new Response('Message sent!')
-  },
-
-  async queue(batch, env) {
-    await router.queue(batch, env)
-  }
-} satisfies ExportedHandler<Env>
-```
-
-## Wrangler Configuration
-
-```json
-{
-  "queues": {
-    "producers": [
-      {
-        "binding": "USER_QUEUE",
-        "queue": "user-queue"
-      }
-    ],
-    "consumers": [
-      {
-        "queue": "user-queue"
-      }
-    ]
-  }
-}
-```
-
 ## Next Steps
 
-- [Single Queue](guide/single-queue.md) – Detailed single queue example
 - [Multiple Queues](guide/multiple-queues.md) – Handle multiple queues
 - [Batch Processing](guide/batch-processing.md) – Process messages in batches
+- [Error Handling](guide/error-handling.md) – Retries and dead letter queues
