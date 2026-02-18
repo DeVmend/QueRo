@@ -21,9 +21,9 @@ npm install quero
 import { QueueRouter } from 'quero'
 
 // Define your message types
-type UserMessage = 
-  | { action: 'created'; userId: string; email: string }
-  | { action: 'deleted'; userId: string }
+type NewUser = { action: 'new-user'; userId: string; email: string }
+type DeleteUser = { action: 'delete-user'; userId: string }
+type UserMessage = NewUser | DeleteUser
 
 // Define your queues
 type Queues = {
@@ -32,10 +32,10 @@ type Queues = {
 
 // Create the router
 const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
-  .action('USER_QUEUE', 'created', async (msg) => {
+  .action('USER_QUEUE', 'new-user', async (msg) => {
     console.log(`User created: ${msg.email}`)
   })
-  .action('USER_QUEUE', 'deleted', async (msg) => {
+  .action('USER_QUEUE', 'delete-user', async (msg) => {
     console.log(`User deleted: ${msg.userId}`)
   })
 

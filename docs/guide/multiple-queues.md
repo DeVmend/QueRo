@@ -8,55 +8,65 @@ Handle multiple queues with a single router.
 
 ```typescript
 // User queue messages
-type UserMessage = 
-  | { action: 'created'; userId: string; email: string }
-  | { action: 'deleted'; userId: string }
+type NewUser = { action: 'new-user'; userId: string; email: string }
+type DeleteUser = { action: 'delete-user'; userId: string }
+type UserMessage = NewUser | DeleteUser
 
-// Email queue messages
-type EmailMessage = 
-  | { action: 'send'; to: string; subject: string; body: string }
-  | { action: 'schedule'; to: string; subject: string; sendAt: string }
+// Order queue messages
+type PlaceOrder = { action: 'place-order'; orderId: string; amount: number }
+type CancelOrder = { action: 'cancel-order'; orderId: string }
+type OrderMessage = PlaceOrder | CancelOrder
 ```
 
-### 2. Map All Queues
+### 2. Map Queue Bindings
 
 ```typescript
 type Queues = {
   USER_QUEUE: Queue<UserMessage>
-  EMAIL_QUEUE: Queue<EmailMessage>
+  ORDER_QUEUE: Queue<OrderMessage>
 }
 ```
 
-### 3. Register Handlers
+### 3. Create Router with Queue Config
+
+When using multiple queues, you need to tell the router how to map queue names to bindings:
 
 ```typescript
 import { QueueRouter } from 'quero'
 
-const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
-  // User queue handlers
-  .action('USER_QUEUE', 'created', async (msg, env) => {
-    console.log(`User created: ${msg.email}`)
+const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>({
+  USER_QUEUE: {
+    name: 'user-queue-production'
+  },
+  ORDER_QUEUE: {
+    name: 'order-queue-production'
+  }
+})
+```
+
+### 4. Register Handlers
+
+```typescript
+router
+  .action('USER_QUEUE', 'new-user', async (msg, env) => {
+    console.log(`New user: ${msg.email}`)
   })
-  .action('USER_QUEUE', 'deleted', async (msg, env) => {
-    console.log(`User deleted: ${msg.userId}`)
+  .action('USER_QUEUE', 'delete-user', async (msg, env) => {
+    console.log(`Delete user: ${msg.userId}`)
   })
-  // Email queue handlers
-  .action('EMAIL_QUEUE', 'send', async (msg, env) => {
-    await sendEmail(msg.to, msg.subject, msg.body)
+  .action('ORDER_QUEUE', 'place-order', async (msg, env) => {
+    console.log(`Order placed: ${msg.orderId}`)
   })
-  .action('EMAIL_QUEUE', 'schedule', async (msg, env) => {
-    await scheduleEmail(msg.to, msg.subject, msg.sendAt)
+  .action('ORDER_QUEUE', 'cancel-order', async (msg, env) => {
+    console.log(`Order cancelled: ${msg.orderId}`)
   })
 ```
 
-### 4. Single Worker Handler
-
-The router automatically routes to the correct handlers based on the queue:
+### 5. Export Worker
 
 ```typescript
 export default {
   async queue(batch, env) {
-    // Works for both USER_QUEUE and EMAIL_QUEUE
     await router.queue(batch, env)
   }
 } satisfies ExportedHandler<Env>
@@ -64,59 +74,117 @@ export default {
 
 ## Wrangler Configuration
 
-```toml
-[[queues.producers]]
-queue = "user-queue"
-binding = "USER_QUEUE"
-
-[[queues.producers]]
-queue = "email-queue"
-binding = "EMAIL_QUEUE"
-
-[[queues.consumers]]
-queue = "user-queue"
-max_batch_size = 10
-
-[[queues.consumers]]
-queue = "email-queue"
-max_batch_size = 50
+```json
+{
+  "queues": {
+    "producers": [
+      {
+        "binding": "USER_QUEUE",
+        "queue": "user-queue-production"
+      },
+      {
+        "binding": "ORDER_QUEUE",
+        "queue": "order-queue-production"
+      }
+    ],
+    "consumers": [
+      { "queue": "user-queue-production" },
+      { "queue": "order-queue-production" }
+    ]
+  }
+}
 ```
 
-## How Routing Works
+## Dynamic Queue Names
 
-When a batch arrives, quero:
-
-1. Reads `batch.queue` to get the queue name
-2. Maps it to the correct binding (e.g., `user-queue` → `USER_QUEUE`)
-3. Routes to handlers registered for that binding
-
-### Explicit Queue Mapping
-
-If auto-mapping doesn't work, use `mapQueue()`:
+Use a function to resolve queue names based on environment:
 
 ```typescript
-const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
-  .mapQueue('my-custom-queue-name', 'USER_QUEUE')
-  .action('USER_QUEUE', 'created', async (msg) => {
-    // ...
+const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>({
+  USER_QUEUE: {
+    name: (env) => `user-queue-${env.ENV_NAME}`
+  },
+  ORDER_QUEUE: {
+    name: (env) => `order-queue-${env.ENV_NAME}`
+  }
+})
+```
+
+With wrangler environments:
+
+```json
+{
+  "vars": {
+    "ENV_NAME": "production"
+  },
+  "queues": {
+    "producers": [
+      { "binding": "USER_QUEUE", "queue": "user-queue-production" }
+    ],
+    "consumers": [
+      { "queue": "user-queue-production" }
+    ]
+  },
+  "env": {
+    "staging": {
+      "vars": {
+        "ENV_NAME": "staging"
+      },
+      "queues": {
+        "producers": [
+          { "binding": "USER_QUEUE", "queue": "user-queue-staging" }
+        ],
+        "consumers": [
+          { "queue": "user-queue-staging" }
+        ]
+      }
+    }
+  }
+}
+```
+
+## Complete Example
+
+```typescript
+import { QueueRouter } from 'quero'
+
+// Message types
+type NewUser = { action: 'new-user'; userId: string; email: string }
+type DeleteUser = { action: 'delete-user'; userId: string }
+type UserMessage = NewUser | DeleteUser
+
+type PlaceOrder = { action: 'place-order'; orderId: string; amount: number }
+type OrderMessage = PlaceOrder
+
+// Queue bindings
+type Queues = {
+  USER_QUEUE: Queue<UserMessage>
+  ORDER_QUEUE: Queue<OrderMessage>
+}
+
+// Router with queue name mapping
+const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>({
+  USER_QUEUE: { name: (env) => `user-queue-${env.ENV_NAME}` },
+  ORDER_QUEUE: { name: (env) => `order-queue-${env.ENV_NAME}` }
+})
+  .action('USER_QUEUE', 'new-user', async (msg) => {
+    console.log(`Welcome ${msg.email}!`)
   })
-```
+  .action('USER_QUEUE', 'delete-user', async (msg) => {
+    console.log(`Goodbye ${msg.userId}`)
+  })
+  .action('ORDER_QUEUE', 'place-order', async (msg) => {
+    console.log(`Order ${msg.orderId}: $${msg.amount}`)
+  })
 
-## Sending to Different Queues
-
-```typescript
-// Send to user queue
-await env.USER_QUEUE.send({
-  action: 'created',
-  userId: '123',
-  email: 'user@example.com'
-})
-
-// Send to email queue
-await env.EMAIL_QUEUE.send({
-  action: 'send',
-  to: 'user@example.com',
-  subject: 'Welcome!',
-  body: 'Thanks for signing up.'
-})
+export default {
+  async fetch(req, env) {
+    await env.USER_QUEUE.send({ action: 'new-user', userId: '1', email: 'a@b.com' })
+    await env.ORDER_QUEUE.send({ action: 'place-order', orderId: 'x', amount: 99 })
+    return new Response('Sent!')
+  },
+  async queue(batch, env) {
+    await router.queue(batch, env)
+  }
+} satisfies ExportedHandler<Env>
 ```

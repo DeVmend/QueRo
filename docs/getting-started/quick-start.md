@@ -13,9 +13,9 @@ npm install quero
 Every message needs an `action` field. Use a union type for multiple actions:
 
 ```typescript
-type UserMessage = 
-  | { action: 'created'; userId: string; email: string }
-  | { action: 'deleted'; userId: string }
+type NewUser = { action: 'new-user'; userId: string; email: string }
+type DeleteUser = { action: 'delete-user'; userId: string }
+type UserMessage = NewUser | DeleteUser
 ```
 
 ## 3. Define Your Queues
@@ -41,13 +41,13 @@ const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
 Use `.action()` to handle messages one at a time:
 
 ```typescript
-router.action('USER_QUEUE', 'created', async (msg, env) => {
-  // msg is typed as { action: 'created'; userId: string; email: string }
+router.action('USER_QUEUE', 'new-user', async (msg, env) => {
+  // msg is typed as { action: 'new-user'; userId: string; email: string }
   console.log(`Welcome ${msg.email}!`)
 })
 
-router.action('USER_QUEUE', 'deleted', async (msg, env) => {
-  // msg is typed as { action: 'deleted'; userId: string }
+router.action('USER_QUEUE', 'delete-user', async (msg, env) => {
+  // msg is typed as { action: 'delete-user'; userId: string }
   console.log(`Goodbye ${msg.userId}`)
 })
 ```
@@ -66,7 +66,7 @@ export default {
 
 ```typescript
 await env.USER_QUEUE.send({
-  action: 'created',
+  action: 'new-user',
   userId: '123',
   email: 'user@example.com'
 })
@@ -78,9 +78,9 @@ await env.USER_QUEUE.send({
 import { QueueRouter } from 'quero'
 
 // Message types
-type UserMessage = 
-  | { action: 'created'; userId: string; email: string }
-  | { action: 'deleted'; userId: string }
+type NewUser = { action: 'new-user'; userId: string; email: string }
+type DeleteUser = { action: 'delete-user'; userId: string }
+type UserMessage = NewUser | DeleteUser
 
 // Queue bindings
 type Queues = {
@@ -89,10 +89,10 @@ type Queues = {
 
 // Router
 const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
-  .action('USER_QUEUE', 'created', async (msg) => {
+  .action('USER_QUEUE', 'new-user', async (msg) => {
     console.log(`User created: ${msg.email}`)
   })
-  .action('USER_QUEUE', 'deleted', async (msg) => {
+  .action('USER_QUEUE', 'delete-user', async (msg) => {
     console.log(`User deleted: ${msg.userId}`)
   })
 
@@ -100,7 +100,7 @@ const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
 export default {
   async fetch(req, env) {
     await env.USER_QUEUE.send({
-      action: 'created',
+      action: 'new-user',
       userId: '123',
       email: 'user@example.com'
     })
@@ -111,6 +111,26 @@ export default {
     await router.queue(batch, env)
   }
 } satisfies ExportedHandler<Env>
+```
+
+## Wrangler Configuration
+
+```json
+{
+  "queues": {
+    "producers": [
+      {
+        "binding": "USER_QUEUE",
+        "queue": "user-queue"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "user-queue"
+      }
+    ]
+  }
+}
 ```
 
 ## Next Steps

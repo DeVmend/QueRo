@@ -9,10 +9,9 @@ The simplest setup: one queue with multiple actions.
 Define your messages as a union type. Each message must have an `action` field:
 
 ```typescript
-type OrderMessage = 
-  | { action: 'placed'; orderId: string; amount: number }
-  | { action: 'shipped'; orderId: string; trackingNumber: string }
-  | { action: 'delivered'; orderId: string }
+type NewUser = { action: 'new-user'; userId: string; email: string }
+type DeleteUser = { action: 'delete-user'; userId: string }
+type UserMessage = NewUser | DeleteUser
 ```
 
 ### 2. Queue Type
@@ -21,7 +20,7 @@ Create a type that maps your binding name to the queue:
 
 ```typescript
 type Queues = {
-  ORDER_QUEUE: Queue<OrderMessage>
+  USER_QUEUE: Queue<UserMessage>
 }
 ```
 
@@ -33,16 +32,12 @@ Create the router and register handlers:
 import { QueueRouter } from 'quero'
 
 const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
-  .action('ORDER_QUEUE', 'placed', async (msg, env) => {
-    // msg.orderId and msg.amount are typed
-    await env.DB.insert({ id: msg.orderId, amount: msg.amount })
+  .action('USER_QUEUE', 'new-user', async (msg, env) => {
+    // msg.userId and msg.email are typed
+    console.log(`Welcome ${msg.email}!`)
   })
-  .action('ORDER_QUEUE', 'shipped', async (msg, env) => {
-    // msg.trackingNumber is available here
-    await sendTrackingEmail(msg.orderId, msg.trackingNumber)
-  })
-  .action('ORDER_QUEUE', 'delivered', async (msg, env) => {
-    await markAsDelivered(msg.orderId)
+  .action('USER_QUEUE', 'delete-user', async (msg, env) => {
+    console.log(`Deleted user ${msg.userId}`)
   })
 ```
 
@@ -58,31 +53,39 @@ export default {
 
 ## Wrangler Configuration
 
-```toml
-[[queues.producers]]
-queue = "order-queue"
-binding = "ORDER_QUEUE"
-
-[[queues.consumers]]
-queue = "order-queue"
-max_batch_size = 10
-max_retries = 3
+```json
+{
+  "queues": {
+    "producers": [
+      {
+        "binding": "USER_QUEUE",
+        "queue": "user-queue"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "user-queue",
+        "max_batch_size": 10,
+        "max_retries": 3
+      }
+    ]
+  }
+}
 ```
 
 ## Sending Messages
 
 ```typescript
 // In your fetch handler or elsewhere
-await env.ORDER_QUEUE.send({
-  action: 'placed',
-  orderId: 'order-123',
-  amount: 99.99
+await env.USER_QUEUE.send({
+  action: 'new-user',
+  userId: 'user-123',
+  email: 'user@example.com'
 })
 
-await env.ORDER_QUEUE.send({
-  action: 'shipped',
-  orderId: 'order-123',
-  trackingNumber: '1Z999AA10123456784'
+await env.USER_QUEUE.send({
+  action: 'delete-user',
+  userId: 'user-123'
 })
 ```
 
@@ -92,15 +95,55 @@ The router ensures full type safety:
 
 ```typescript
 // ✅ Correct - TypeScript knows the shape
-router.action('ORDER_QUEUE', 'placed', async (msg) => {
-  console.log(msg.amount) // number
+router.action('USER_QUEUE', 'new-user', async (msg) => {
+  console.log(msg.email) // string
 })
 
-// ❌ Error - 'cancelled' is not a valid action
-router.action('ORDER_QUEUE', 'cancelled', async (msg) => {})
+// ❌ Error - 'unknown-action' is not a valid action
+router.action('USER_QUEUE', 'unknown-action', async (msg) => {})
 
-// ❌ Error - trackingNumber doesn't exist on 'placed'
-router.action('ORDER_QUEUE', 'placed', async (msg) => {
-  console.log(msg.trackingNumber) // TypeScript error
+// ❌ Error - email doesn't exist on 'delete-user'
+router.action('USER_QUEUE', 'delete-user', async (msg) => {
+  console.log(msg.email) // TypeScript error
 })
+```
+
+## Complete Example
+
+```typescript
+import { QueueRouter } from 'quero'
+
+// Message types
+type NewUser = { action: 'new-user'; userId: string; email: string }
+type DeleteUser = { action: 'delete-user'; userId: string }
+type UserMessage = NewUser | DeleteUser
+
+// Queue binding
+type Queues = {
+  USER_QUEUE: Queue<UserMessage>
+}
+
+// Router
+const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
+  .action('USER_QUEUE', 'new-user', async (msg) => {
+    console.log(`New user: ${msg.email}`)
+  })
+  .action('USER_QUEUE', 'delete-user', async (msg) => {
+    console.log(`Deleted: ${msg.userId}`)
+  })
+
+// Worker
+export default {
+  async fetch(req, env) {
+    await env.USER_QUEUE.send({
+      action: 'new-user',
+      userId: 'foo',
+      email: 'foo@bar.com'
+    })
+    return new Response('Sent!')
+  },
+  async queue(batch, env) {
+    await router.queue(batch, env)
+  }
+} satisfies ExportedHandler<Env>
 ```

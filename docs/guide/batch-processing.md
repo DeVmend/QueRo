@@ -15,30 +15,26 @@ Use `.batch()` instead of `.action()` when:
 ```typescript
 import { QueueRouter } from 'quero'
 
-type AnalyticsMessage = 
-  | { action: 'pageview'; url: string; timestamp: number }
-  | { action: 'click'; elementId: string; timestamp: number }
+type NewUser = { action: 'new-user'; userId: string; email: string }
+type DeleteUser = { action: 'delete-user'; userId: string }
+type UserMessage = NewUser | DeleteUser
 
 type Queues = {
-  ANALYTICS_QUEUE: Queue<AnalyticsMessage>
+  USER_QUEUE: Queue<UserMessage>
 }
 
 const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
-  // Process all pageviews together
-  .batch('ANALYTICS_QUEUE', 'pageview', async (messages, env) => {
-    // messages is an array of all pageview messages in the batch
-    const rows = messages.map(m => ({
-      url: m.url,
-      timestamp: m.timestamp
-    }))
-    await env.DB.insertBatch('pageviews', rows)
+  // Process all new-user messages together
+  .batch('USER_QUEUE', 'new-user', async (messages, env) => {
+    // messages is an array of all new-user messages in the batch
+    console.log(`Processing ${messages.length} new users`)
+    for (const msg of messages) {
+      console.log(`- ${msg.email}`)
+    }
   })
-  // Process clicks individually
-  .action('ANALYTICS_QUEUE', 'click', async (msg, env) => {
-    await env.DB.insert('clicks', {
-      elementId: msg.elementId,
-      timestamp: msg.timestamp
-    })
+  // Process delete-user individually
+  .action('USER_QUEUE', 'delete-user', async (msg, env) => {
+    console.log(`Deleting user: ${msg.userId}`)
   })
 ```
 
@@ -52,26 +48,28 @@ const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
 ### Example Flow
 
 If a batch contains:
-- 3 `pageview` messages
-- 2 `click` messages
+- 3 `new-user` messages
+- 2 `delete-user` messages
 
 Then:
-- `batch('pageview', ...)` is called once with array of 3 messages
-- `action('click', ...)` is called twice (once per message)
+- `batch('new-user', ...)` is called once with array of 3 messages
+- `action('delete-user', ...)` is called twice (once per message)
 
-## Mixing Action and Batch
-
-You can mix both in the same router:
+## Real-World Example
 
 ```typescript
 const router = new QueueRouter<{ Bindings: Env; Queues: Queues }>()
-  // Batch: efficient bulk insert
-  .batch('EVENTS', 'log', async (messages, env) => {
-    await bulkInsertLogs(messages)
-  })
-  // Action: needs individual processing
-  .action('EVENTS', 'alert', async (msg, env) => {
-    await sendAlert(msg)
+  .batch('USER_QUEUE', 'new-user', async (messages, env) => {
+    // Bulk insert all users at once
+    const users = messages.map(msg => ({
+      id: msg.userId,
+      email: msg.email
+    }))
+    
+    await env.DB.prepare(
+      'INSERT INTO users (id, email) VALUES ' +
+      users.map(() => '(?, ?)').join(', ')
+    ).bind(...users.flatMap(u => [u.id, u.email])).run()
   })
 ```
 
@@ -93,14 +91,12 @@ If a batch handler throws:
 Batch handlers receive a typed array:
 
 ```typescript
-type OrderMessage = 
-  | { action: 'placed'; orderId: string; items: string[] }
-  | { action: 'cancelled'; orderId: string; reason: string }
+type NewUser = { action: 'new-user'; userId: string; email: string }
 
-router.batch('ORDER_QUEUE', 'placed', async (messages) => {
-  // messages: { action: 'placed'; orderId: string; items: string[] }[]
+router.batch('USER_QUEUE', 'new-user', async (messages) => {
+  // messages: { action: 'new-user'; userId: string; email: string }[]
   for (const msg of messages) {
-    console.log(msg.orderId, msg.items) // ✅ Fully typed
+    console.log(msg.userId, msg.email) // ✅ Fully typed
   }
 })
 ```
