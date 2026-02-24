@@ -6,22 +6,39 @@ import type {
     Env,
     Handler,
     QueueConfig,
+    QueueRouterOptions,
+    UnhandledStrategy,
+} from './types'
+import {
+    isActionMessage,
+    HandlerError,
+    ValidationError,
+    BindingResolutionError,
 } from './types'
 
 export class QueueRouter<E extends Env = Env> {
     private readonly handlers = new Map<string, Handler<ActionMessage, E>>()
     private readonly queueToBinding = new Map<string, string>()
+    private readonly options: QueueRouterOptions
 
     constructor(
-        protected readonly queues?: Partial<Record<keyof E['Queues'], QueueConfig<E['Bindings']>>>
-    ) {}
+        protected readonly queues?: Partial<Record<keyof E['Queues'], QueueConfig<E['Bindings']>>>,
+        options?: QueueRouterOptions
+    ) {
+        this.options = options ?? {}
+    }
 
     private resolveQueueName(binding: keyof E['Queues'], env?: E['Bindings']): string | undefined {
         const config = this.queues?.[binding]
         if (!config?.name) return undefined
 
         if (typeof config.name === 'function') {
-            return config.name(env ?? ({} as E['Bindings']))
+            if (!env) {
+                throw new ValidationError(
+                    `Queue "${String(binding)}" uses a dynamic name function but no env was provided`
+                )
+            }
+            return config.name(env)
         }
         return config.name
     }
@@ -146,22 +163,30 @@ export class QueueRouter<E extends Env = Env> {
         messagesByAction: Map<string, AllMessageTypes<E['Queues']>[]>,
         env?: E['Bindings'],
         executionCtx?: ExecutionContext
-    ): Promise<void> {
+    ): Promise<'handled' | 'batched' | 'unhandled'> {
+        // Runtime validation: ensure message.body is a valid ActionMessage
+        if (!isActionMessage(message.body)) {
+            throw new ValidationError(
+                `Invalid message body: missing or invalid "action" field. Got: ${JSON.stringify(message.body)}`
+            )
+        }
+
         const action = message.body.action
         const key = this.buildHandlerKey(binding, action)
         const handler = this.handlers.get(key)
 
         if (!handler) {
-            console.warn(`No handler found for action: ${action} in binding: ${binding}`)
-            return
+            return 'unhandled'
         }
 
         if (handler.type === 'multi') {
             const messages = messagesByAction.get(key) ?? []
             messages.push(message.body)
             messagesByAction.set(key, messages)
+            return 'batched'
         } else {
             await handler.handle(message.body, env, executionCtx)
+            return 'handled'
         }
     }
 
@@ -209,6 +234,27 @@ export class QueueRouter<E extends Env = Env> {
         return undefined
     }
 
+    /**
+     * Handle an unhandled message based on the configured strategy
+     */
+    private async handleUnhandled(
+        message: { body: AllMessageTypes<E['Queues']>; ack: () => void; retry: () => void },
+    ): Promise<void> {
+        const strategy = this.options.onUnhandled ?? 'retry'
+
+        if (strategy === 'retry') {
+            console.warn(`No handler found for action: "${(message.body as ActionMessage).action}". Retrying message.`)
+            message.retry()
+        } else if (strategy === 'ack') {
+            console.warn(`No handler found for action: "${(message.body as ActionMessage).action}". Acknowledging message (will be lost).`)
+            message.ack()
+        } else {
+            // Custom handler function
+            await strategy(message.body as ActionMessage)
+            message.ack()
+        }
+    }
+
     protected async processBatch(
         batch: MessageBatch<AllMessageTypes<E['Queues']>>,
         env?: E['Bindings'],
@@ -227,30 +273,43 @@ export class QueueRouter<E extends Env = Env> {
         }
 
         const messagesByAction = new Map<string, AllMessageTypes<E['Queues']>[]>()
-        const processedMessages: { ack: () => void; retry: () => void }[] = []
+        // Track single-handled messages separately from batch-pending messages
+        const singleHandledMessages: { ack: () => void; retry: () => void }[] = []
+        const batchPendingMessages: { ack: () => void; retry: () => void }[] = []
 
         for (const message of batch.messages) {
             try {
-                await this.processMessage(binding, message, messagesByAction, env, executionCtx)
-                processedMessages.push(message)
+                const result = await this.processMessage(binding, message, messagesByAction, env, executionCtx)
+
+                if (result === 'handled') {
+                    // Single handler succeeded — ack immediately, safe from batch failures
+                    message.ack()
+                    singleHandledMessages.push(message)
+                } else if (result === 'batched') {
+                    // Collected for batch processing — ack depends on batch handler success
+                    batchPendingMessages.push(message)
+                } else if (result === 'unhandled') {
+                    await this.handleUnhandled(message)
+                }
             } catch (error) {
                 console.error(`Error processing message:`, error)
                 message.retry()
             }
         }
 
-        // Process batch handlers and ack only after all handlers complete successfully
-        try {
-            await this.processMultiHandlers(messagesByAction, env, executionCtx)
-            // Ack all successfully processed messages
-            for (const message of processedMessages) {
-                message.ack()
-            }
-        } catch (error) {
-            console.error(`Error in batch handler:`, error)
-            // Retry all messages if batch handler fails
-            for (const message of processedMessages) {
-                message.retry()
+        // Process batch handlers and ack only batch-pending messages after success
+        if (batchPendingMessages.length > 0) {
+            try {
+                await this.processMultiHandlers(messagesByAction, env, executionCtx)
+                for (const message of batchPendingMessages) {
+                    message.ack()
+                }
+            } catch (error) {
+                console.error(`Error in batch handler:`, error)
+                // Only retry batch-pending messages, not already-acked single-handled ones
+                for (const message of batchPendingMessages) {
+                    message.retry()
+                }
             }
         }
     }
